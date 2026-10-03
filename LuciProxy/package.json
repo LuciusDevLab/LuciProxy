@@ -1,0 +1,13 @@
+{
+  "name": "luciproxy",
+  "version": "1.0.0",
+  "description": "LuciProxy - Cloudflare Edge Proxy & Subscription Gateway",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/**/*.test.js"
+  },
+  "keywords": ["proxy", "vless", "trojan", "cloudflare-workers", "luciproxy"],
+  "author": "LuciProxy Project",
+  "license": "AGPL-3.0"
+}

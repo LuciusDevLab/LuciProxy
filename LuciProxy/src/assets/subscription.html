@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>__USER_NAME__ — LuciProxy Subscriber Portal</title>
+    <style>
+        :root {
+            --bg-body: #090d16;
+            --bg-card: #111827;
+            --bg-subtle: #161f33;
+            --bg-input: #0f172a;
+            --border-color: #1f293d;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #6366f1;
+            --accent-hover: #4f46e5;
+            --cyan: #06b6d4;
+            --green: #10b981;
+            --amber: #f59e0b;
+            --red: #ef4444;
+            --radius-md: 10px;
+            --radius-lg: 16px;
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: var(--font-family);
+            background: var(--bg-body);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            line-height: 1.5;
+        }
+
+        .portal-wrapper {
+            max-width: 480px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        /* Profile Header Card */
+        .profile-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            text-align: center;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+        }
+        .portal-avatar {
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, var(--accent), var(--cyan));
+            border-radius: 16px;
+            margin: 0 auto 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.6rem;
+            font-weight: 800;
+            color: white;
+        }
+        .user-name {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        .user-id {
+            font-size: 0.75rem;
+            font-family: monospace;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            word-break: break-all;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .status-active { background: rgba(16, 185, 129, 0.15); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.3); }
+        .status-paused { background: rgba(245, 158, 11, 0.15); color: var(--amber); border: 1px solid rgba(245, 158, 11, 0.3); }
+        .status-expired { background: rgba(239, 68, 68, 0.15); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.3); }
+        .status-limit { background: rgba(239, 68, 68, 0.15); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.3); }
+
+        /* Section Card */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+        }
+        .card-heading {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            font-weight: 600;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* Progress Bar */
+        .progress-bar-bg {
+            background: #1e293b;
+        }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 4px;
+        }
+        .metric-big {
+            font-size: 1.4rem;
+            font-weight: 700;
+        }
+        .metric-sub {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        /* Subscription Links */
+        .sub-link-box {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .sub-link-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-main);
+            font-size: 0.8rem;
+            outline: none;
+            font-family: monospace;
+        }
+        .btn {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            border-radius: var(--radius-md);
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            gap: 6px;
+        }
+        .btn:hover { background: var(--accent-hover); }
+        .btn-sm { padding: 5px 10px; font-size: 0.78rem; border-radius: 6px; }
+        .btn-secondary { background: var(--bg-subtle); color: var(--text-main); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background: #1e293b; border-color: var(--text-muted); }
+
+        .client-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="portal-wrapper">
+
+        <!-- User Identity Header -->
+        <div class="profile-card">
+            <div class="portal-avatar">L</div>
+            <div class="user-name">__USER_NAME__</div>
+            <div class="user-id">__USER_ID__</div>
+            <span class="status-badge status-__STATUS_CODE__">__STATUS_CODE__</span>
+        </div>
+
+        <!-- Bandwidth Usage Card -->
+        <div class="card">
+            <div class="card-heading">
+                <span>Total Bandwidth</span>
+                <span>__TOTAL_PERCENT__%</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-big">__TOTAL_GB__ <span style="font-size:0.9rem; font-weight:normal; color:var(--text-muted);">GB</span></span>
+                <span class="metric-sub">Limit: __LIMIT_TOTAL_GB__ GB</span>
+            </div>
+            __TOTAL_PROGRESS__
+
+            <div style="border-top: 1px solid var(--border-color); margin: 16px 0; padding-top: 14px;">
+                <div class="card-heading">
+                    <span>Daily Usage</span>
+                    <span>__DAILY_PERCENT__%</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-big" style="font-size: 1.15rem;">__DAILY_GB__ <span style="font-size:0.8rem; font-weight:normal; color:var(--text-muted);">GB</span></span>
+                    <span class="metric-sub">Daily Cap: __LIMIT_DAILY_GB__ GB</span>
+                </div>
+                __DAILY_PROGRESS__
+            </div>
+
+            <div style="border-top: 1px solid var(--border-color); margin-top: 14px; padding-top: 12px; display: flex; justify-content: space-between; font-size: 0.85rem;">
+                <span style="color:var(--text-muted);">Expiration Date:</span>
+                <strong>__EXPIRY_DATE__</strong>
+            </div>
+        </div>
+
+        <!-- Subscription Configurations -->
+        <div class="card">
+            <div class="card-heading">Subscription Link</div>
+            <div class="sub-link-box">
+                <input type="text" id="sub-url-input" class="sub-link-input" readonly value="__SYNC_NORMAL__">
+                <button class="btn btn-sm btn-secondary" onclick="copyInput('sub-url-input', this)">Copy</button>
+            </div>
+
+            <div class="card-heading" style="margin-top: 16px;">One-Click Client Import</div>
+            <div class="client-buttons">
+                <a id="btn-import-singbox" href="#" class="btn btn-secondary">Sing-Box</a>
+                <a id="btn-import-clash" href="#" class="btn btn-secondary">Clash</a>
+                <a id="btn-import-v2ray" href="#" class="btn btn-secondary">v2rayNG</a>
+                <a id="btn-import-streisand" href="#" class="btn btn-secondary">Streisand</a>
+            </div>
+
+            <div class="card-heading" style="margin-top: 16px;">Download Formats</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                <button class="btn btn-sm btn-secondary" onclick="copyFormat('singbox', this)">Sing-Box JSON</button>
+                <button class="btn btn-sm btn-secondary" onclick="copyFormat('clash', this)">Clash YAML</button>
+                <button class="btn btn-sm btn-secondary" onclick="copyFormat('v2ray', this)">V2Ray JSON</button>
+                <button class="btn btn-sm btn-secondary" onclick="copyFormat('wireguard', this)">WireGuard</button>
+                <button class="btn btn-sm btn-secondary" onclick="copyFormat('raw', this)">Raw URIs</button>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="text-align: center; font-size: 0.75rem; color: var(--text-muted); padding: 8px;">
+            Powered by <strong>LuciProxy Gateway</strong>
+        </div>
+
+    </div>
+
+    <script>
+        const subBase = '__SYNC_NORMAL__';
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const encodedUrl = encodeURIComponent(subBase);
+            document.getElementById('btn-import-singbox').href = `sing-box://import-remote-profile?url=${encodedUrl}#LuciProxy`;
+            document.getElementById('btn-import-clash').href = `clash://install-config?url=${encodedUrl}&name=LuciProxy`;
+            document.getElementById('btn-import-v2ray').href = `v2rayng://install-config?url=${encodedUrl}#LuciProxy`;
+            document.getElementById('btn-import-streisand').href = `streisand://import/${subBase}`;
+        });
+
+        function copyInput(id, btn) {
+            const input = document.getElementById(id);
+            navigator.clipboard.writeText(input.value).then(() => {
+                const prev = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => btn.textContent = prev, 1500);
+            });
+        }
+
+        function copyFormat(flag, btn) {
+            const flagUrl = subBase.includes('?') ? `${subBase}&flag=${flag}` : `${subBase}?flag=${flag}`;
+            navigator.clipboard.writeText(flagUrl).then(() => {
+                const prev = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => btn.textContent = prev, 1500);
+            });
+        }
+    </script>
+</body>
+</html>

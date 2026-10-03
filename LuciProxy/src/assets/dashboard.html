@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>LuciProxy — Edge Control Console</title>
+    <style>
+        :root {
+            --bg-body: #090d16;
+            --bg-card: #111827;
+            --bg-card-subtle: #161f33;
+            --bg-input: #0f172a;
+            --border-color: #1f293d;
+            --border-focus: #6366f1;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #6366f1;
+            --accent-hover: #4f46e5;
+            --cyan: #06b6d4;
+            --green: #10b981;
+            --amber: #f59e0b;
+            --red: #ef4444;
+            --radius-md: 10px;
+            --radius-lg: 16px;
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: var(--font-family);
+            background: var(--bg-body);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            line-height: 1.5;
+        }
+
+        /* Top Navigation Header */
+        header {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            padding: 14px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 40;
+        }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 700;
+            font-size: 1.15rem;
+            letter-spacing: -0.02em;
+        }
+        .brand-badge {
+            background: linear-gradient(135deg, var(--accent), var(--cyan));
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 1.1rem;
+        }
+        .header-meta {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--green);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+        .status-pill.warning {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--amber);
+            border-color: rgba(245, 158, 11, 0.2);
+        }
+        .btn-ghost {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 6px 14px;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-size: 0.82rem;
+            font-weight: 500;
+            transition: all 0.15s ease;
+        }
+        .btn-ghost:hover {
+            background: var(--bg-card-subtle);
+            border-color: var(--text-muted);
+        }
+
+        /* Tab Navigation Bar */
+        nav {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 24px;
+            display: flex;
+            gap: 24px;
+            overflow-x: auto;
+        }
+        .nav-item {
+            padding: 12px 4px;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            border-bottom: 2px solid transparent;
+            white-space: nowrap;
+            transition: all 0.15s ease;
+        }
+        .nav-item:hover { color: var(--text-main); }
+        .nav-item.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+
+        /* Main Container */
+        main {
+            flex: 1;
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        /* Card Sections */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .card-title {
+            font-size: 1.05rem;
+            font-weight: 600;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        /* Metric Grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .metric-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .metric-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .metric-value {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        /* Tables */
+        .table-responsive {
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.88rem;
+        }
+        th {
+            color: var(--text-muted);
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border-color);
+            font-weight: 600;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+        }
+        td {
+            padding: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .badge-active { background: rgba(16, 185, 129, 0.15); color: var(--green); }
+        .badge-paused { background: rgba(245, 158, 11, 0.15); color: var(--amber); }
+        .badge-expired { background: rgba(239, 68, 68, 0.15); color: var(--red); }
+        .badge-limit { background: rgba(239, 68, 68, 0.15); color: var(--red); }
+
+        /* Buttons & Inputs */
+        .btn {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: var(--radius-md);
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn:hover { background: var(--accent-hover); }
+        .btn-sm { padding: 5px 10px; font-size: 0.78rem; border-radius: 6px; }
+        .btn-secondary { background: var(--bg-card-subtle); color: var(--text-main); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background: #1e293b; border-color: var(--text-muted); }
+        .btn-danger { background: rgba(239, 68, 68, 0.2); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.3); }
+        .btn-danger:hover { background: var(--red); color: white; }
+
+        .input, .select, .textarea {
+            width: 100%;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 9px 12px;
+            border-radius: var(--radius-md);
+            font-size: 0.88rem;
+            outline: none;
+            transition: border-color 0.15s ease;
+        }
+        .input:focus, .select:focus, .textarea:focus {
+            border-color: var(--border-focus);
+        }
+        .form-group {
+            margin-bottom: 14px;
+        }
+        .form-label {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        /* Modals */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            padding: 16px;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            max-width: 540px;
+            width: 100%;
+            padding: 24px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        /* Login Screen Overlay */
+        #login-screen {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: var(--bg-body);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            padding: 16px;
+        }
+        .login-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            max-width: 380px;
+            width: 100%;
+            padding: 32px 28px;
+            text-align: center;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+        .login-logo {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--accent), var(--cyan));
+            border-radius: 12px;
+            margin: 0 auto 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: white;
+        }
+
+        /* Logs Console */
+        .console-logs {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 12px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            max-height: 380px;
+            overflow-y: auto;
+            color: #cbd5e1;
+            white-space: pre-wrap;
+        }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <!-- Login Authentication View -->
+    <div id="login-screen">
+        <div class="login-card">
+            <div class="login-logo">L</div>
+            <h2 style="font-size: 1.3rem; margin-bottom: 6px;">LuciProxy</h2>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 24px;">Enter administrative key to manage edge gateway</p>
+            <form id="login-form">
+                <div class="form-group" style="text-align: left;">
+                    <label class="form-label" for="login-key">Master Key</label>
+                    <input type="password" id="login-key" class="input" placeholder="••••••••" autofocus required>
+                </div>
+                <div id="login-error" style="color: var(--red); font-size: 0.8rem; margin-bottom: 12px; min-height: 18px;"></div>
+                <button type="submit" class="btn" style="width: 100%; justify-content: center;">Sign In</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Top Header -->
+    <header>
+        <div class="brand">
+            <div class="brand-badge">L</div>
+            <span>LuciProxy</span>
+        </div>
+        <div class="header-meta">
+            <span id="header-edge-colo" class="status-pill">Edge Online</span>
+            <span id="header-db-pill" class="status-pill">D1 Active</span>
+            <button class="btn-ghost" id="btn-logout">Logout</button>
+        </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav>
+        <div class="nav-item active" data-tab="tab-overview">Overview</div>
+        <div class="nav-item" data-tab="tab-subscribers">Subscribers</div>
+        <div class="nav-item" data-tab="tab-settings">System Configuration</div>
+        <div class="nav-item" data-tab="tab-diagnostics">Diagnostics</div>
+        <div class="nav-item" data-tab="tab-logs">Audit Logs</div>
+    </nav>
+
+    <!-- Dynamic Warning Placeholder -->
+    <div style="max-width: 1200px; width: 100%; margin: 16px auto 0; padding: 0 24px;">
+        __HAS_DB_WARNING__
+    </div>
+
+    <!-- Main Workspace -->
+    <main>
+
+        <!-- TAB 1: OVERVIEW -->
+        <section id="tab-overview" class="tab-content">
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <span class="metric-label">Active Subscribers</span>
+                    <span class="metric-value" id="stat-subscribers">0</span>
+                </div>
+                <div class="metric-card">
+                    <span class="metric-label">Total Bandwidth</span>
+                    <span class="metric-value" id="stat-bandwidth">0.00 GB</span>
+                </div>
+                <div class="metric-card">
+                    <span class="metric-label">Cloudflare Colo</span>
+                    <span class="metric-value" id="stat-colo">EDGE</span>
+                </div>
+                <div class="metric-card">
+                    <span class="metric-label">Version</span>
+                    <span class="metric-value" style="font-size: 1.3rem;">v__CURRENT_VERSION__</span>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">
+                    <span>Edge Node Information</span>
+                    <button class="btn btn-sm btn-secondary" onclick="refreshOverview()">Refresh Metrics</button>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; font-size: 0.88rem;">
+                    <div><span style="color:var(--text-muted);">Client Egress IP:</span> <strong id="node-ip">—</strong></div>
+                    <div><span style="color:var(--text-muted);">Location:</span> <strong id="node-loc">—</strong></div>
+                    <div><span style="color:var(--text-muted);">Protocol Mode:</span> <strong id="node-mode">Alpha (VLESS)</strong></div>
+                    <div><span style="color:var(--text-muted);">Subscription Route:</span> <strong id="node-sub-route">/sync</strong></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: SUBSCRIBERS -->
+        <section id="tab-subscribers" class="tab-content hidden">
+            <div class="card">
+                <div class="card-title">
+                    <span>Subscribers Management</span>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="user-search" class="input" placeholder="Search subscribers..." style="width: 220px; padding: 6px 10px; font-size: 0.82rem;">
+                        <button class="btn btn-sm" onclick="openAddUserModal()">+ Add Subscriber</button>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name / UUID</th>
+                                <th>Status</th>
+                                <th>Traffic Used</th>
+                                <th>Expiration</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="subscribers-tbody">
+                            <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Loading subscribers...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: SYSTEM CONFIGURATION -->
+        <section id="tab-settings" class="tab-content hidden">
+            <div class="card">
+                <div class="card-title">Gateway Settings</div>
+                <form id="settings-form">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+                        <div class="form-group">
+                            <label class="form-label">Subscription Route (Secret Path)</label>
+                            <input type="text" id="cfg-api-route" class="input" value="sync" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Protocol Mode</label>
+                            <select id="cfg-mode" class="select">
+                                <option value="alpha">Alpha — VLESS over WebSocket (Recommended)</option>
+                                <option value="beta">Beta — Trojan over WebSocket</option>
+                                <option value="both">Both — Dual VLESS & Trojan Outbounds</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Update Master Password (leave blank to keep)</label>
+                            <input type="password" id="cfg-master-key" class="input" placeholder="New master key">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Custom DoH Resolver</label>
+                            <input type="text" id="cfg-custom-dns" class="input" value="https://cloudflare-dns.com/dns-query">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Clean CDN IP Addresses (one per line, e.g. 104.16.1.1#Cloudflare)</label>
+                        <textarea id="cfg-clean-ips" class="textarea" rows="4" placeholder="104.16.1.1#CF1&#10;172.64.0.1#CF2"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Upstream Proxy / Backup Relays (one per line, e.g. 1.2.3.4:443)</label>
+                        <textarea id="cfg-backup-relay" class="textarea" rows="3" placeholder="1.2.3.4:443"></textarea>
+                    </div>
+
+                    <div style="display: flex; gap: 12px; margin-top: 20px;">
+                        <button type="submit" class="btn">Save Configuration</button>
+                        <button type="button" class="btn btn-secondary" onclick="exportSharedSettings()">Export Settings</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <!-- TAB 4: DIAGNOSTICS -->
+        <section id="tab-diagnostics" class="tab-content hidden">
+            <div class="card">
+                <div class="card-title">TCP Proxy-IP Health & Latency Probe</div>
+                <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                    <input type="text" id="diag-target-ip" class="input" placeholder="Target Proxy IP or Domain (e.g. 104.16.1.1)" style="flex:1;">
+                    <button class="btn" onclick="runProxyIpProbe()">Test Endpoint</button>
+                </div>
+                <div id="diag-results" class="console-logs">Awaiting test execution...</div>
+            </div>
+        </section>
+
+        <!-- TAB 5: AUDIT LOGS -->
+        <section id="tab-logs" class="tab-content hidden">
+            <div class="card">
+                <div class="card-title">
+                    <span>Recent Activity Logs</span>
+                    <button class="btn btn-sm btn-danger" onclick="clearAuditLogs()">Clear Logs</button>
+                </div>
+                <div id="audit-logs-console" class="console-logs">Loading audit records...</div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Modal: Add / Edit Subscriber -->
+    <div id="modal-user" class="modal-overlay">
+        <div class="modal">
+            <h3 id="modal-user-title" style="margin-bottom: 16px;">Add New Subscriber</h3>
+            <form id="form-user">
+                <input type="hidden" id="user-edit-id">
+                <div class="form-group">
+                    <label class="form-label">Subscriber Name</label>
+                    <input type="text" id="form-user-name" class="input" placeholder="e.g. Alice" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Total Bandwidth Limit (GB, 0 = Unlimited)</label>
+                    <input type="number" id="form-user-limit-gb" class="input" value="0" min="0" step="0.5">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Expiration Date (YYYY-MM-DD, blank = No Expiry)</label>
+                    <input type="date" id="form-user-expiry" class="input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Custom Clean IPs (Optional)</label>
+                    <textarea id="form-user-clean-ip" class="textarea" rows="2" placeholder="Leave empty to use global clean IPs"></textarea>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px;">
+                    <button type="button" class="btn btn-secondary" onclick="closeUserModal()">Cancel</button>
+                    <button type="submit" class="btn">Save Subscriber</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Subscription Links Export -->
+    <div id="modal-links" class="modal-overlay">
+        <div class="modal">
+            <h3 style="margin-bottom: 14px;">Subscriber Subscription Links</h3>
+            <div id="modal-links-content" style="display: flex; flex-direction: column; gap: 12px; font-size: 0.85rem;"></div>
+            <div style="display: flex; justify-content: flex-end; margin-top: 20px;">
+                <button type="button" class="btn btn-secondary" onclick="closeLinksModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Client-Side Application Driver -->
+    <script>
+        const state = {
+            masterKey: '',
+            config: {},
+            users: [],
+            apiRoute: '__API_ROUTE__'.replace(/[^a-zA-Z0-9_-]/g, '') || 'sync',
+            sysUsage: {},
+        };
+
+        // Initialize session on load
+        window.addEventListener('DOMContentLoaded', () => {
+            setupNavigation();
+            const savedSession = localStorage.getItem('luci_session');
+            if (savedSession) {
+                try {
+                    const parsed = JSON.parse(savedSession);
+                    if (parsed?.key) {
+                        state.masterKey = parsed.key;
+                        authenticate(parsed.key, true);
+                        return;
+                    }
+                } catch {}
+            }
+            document.getElementById('login-screen').classList.remove('hidden');
+        });
+
+        // Navigation tab switching
+        function setupNavigation() {
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
+                    item.classList.add('active');
+                    const target = document.getElementById(item.dataset.tab);
+                    if (target) target.classList.remove('hidden');
+
+                    if (item.dataset.tab === 'tab-subscribers') loadSubscribers();
+                    if (item.dataset.tab === 'tab-logs') loadAuditLogs();
+                });
+            });
+        }
+
+        // Login Handler
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const key = document.getElementById('login-key').value.trim();
+            if (!key) return;
+            await authenticate(key, false);
+        });
+
+        document.getElementById('btn-logout').addEventListener('click', () => {
+            localStorage.removeItem('luci_session');
+            state.masterKey = '';
+            location.reload();
+        });
+
+        async function authenticate(key, isAuto = false) {
+            const errDiv = document.getElementById('login-error');
+            errDiv.textContent = 'Authenticating...';
+            try {
+                const res = await fetch(`/${state.apiRoute}/api/auth`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key })
+                });
+
+                if (!res.ok) {
+                    if (isAuto) {
+                        localStorage.removeItem('luci_session');
+                        document.getElementById('login-screen').classList.remove('hidden');
+                        return;
+                    }
+                    errDiv.textContent = 'Invalid credentials. Access denied.';
+                    return;
+                }
+
+                const data = await res.json();
+                if (data.success) {
+                    state.masterKey = key;
+                    state.config = data.config || {};
+                    state.sysUsage = data.sysUsage || {};
+                    localStorage.setItem('luci_session', JSON.stringify({ key, ts: Date.now() }));
+                    document.getElementById('login-screen').classList.add('hidden');
+                    updateOverviewUI(data);
+                    populateSettings(data.config);
+                } else {
+                    errDiv.textContent = data.error || 'Authentication failed';
+                }
+            } catch (err) {
+                errDiv.textContent = 'Connection error: ' + err.message;
+            }
+        }
+
+        function updateOverviewUI(data) {
+            document.getElementById('node-ip').textContent = data.network?.ip || 'Edge IP';
+            document.getElementById('node-loc').textContent = data.network?.loc || 'Global Cloudflare';
+            document.getElementById('stat-colo').textContent = data.network?.colo || 'EDGE';
+            document.getElementById('node-mode').textContent = (state.config.mode || 'alpha').toUpperCase();
+            document.getElementById('node-sub-route').textContent = '/' + (state.config.apiRoute || state.apiRoute);
+
+            const users = state.config.users || [];
+            document.getElementById('stat-subscribers').textContent = users.length;
+
+            let totalBytes = 0;
+            if (state.sysUsage) {
+                for (const u of Object.values(state.sysUsage)) {
+                    totalBytes += (u.bytes || 0);
+                }
+            }
+            document.getElementById('stat-bandwidth').textContent = (totalBytes / 1073741824).toFixed(2) + ' GB';
+        }
+
+        async function refreshOverview() {
+            authenticate(state.masterKey, true);
+        }
+
+        // Subscribers View
+        async function loadSubscribers() {
+            const tbody = document.getElementById('subscribers-tbody');
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Fetching subscribers...</td></tr>';
+            try {
+                const res = await fetch(`/${state.apiRoute}/api/users`, {
+                    headers: { 'Authorization': 'Bearer ' + state.masterKey }
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    tbody.innerHTML = `<tr><td colspan="5" style="color:var(--red);">Error: ${data.error}</td></tr>`;
+                    return;
+                }
+                state.users = data.users || [];
+                renderSubscribersTable(state.users);
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="5" style="color:var(--red);">Network error: ${err.message}</td></tr>`;
+            }
+        }
+
+        function renderSubscribersTable(users) {
+            const tbody = document.getElementById('subscribers-tbody');
+            if (users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 24px;">No subscriber profiles found. Click "+ Add Subscriber" to create one.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = users.map(u => {
+                const usedGb = (u.usage?.total / 1073741824).toFixed(2);
+                const limitGb = u.limitTotalReq ? (u.usage?.limit / 1073741824).toFixed(2) + ' GB' : 'Unlimited';
+                const statusBadge = `<span class="badge badge-${u.status}">${u.status.toUpperCase()}</span>`;
+                const expiryTxt = u.expiryMs ? new Date(u.expiryMs).toISOString().split('T')[0] : 'Never';
+
+                return `<tr>
+                    <td><strong>${escapeHtml(u.name)}</strong><br><span style="font-size:0.75rem; color:var(--text-muted); font-family:monospace;">${u.id}</span></td>
+                    <td>${statusBadge}</td>
+                    <td>${usedGb} GB / ${limitGb}</td>
+                    <td>${expiryTxt}</td>
+                    <td style="white-space: nowrap;">
+                        <button class="btn btn-sm btn-secondary" onclick="showLinksModal('${u.id}', '${escapeHtml(u.name)}')">Links</button>
+                        <button class="btn btn-sm btn-secondary" onclick="toggleUserPause('${u.id}')">${u.isPaused ? 'Resume' : 'Pause'}</button>
+                        <button class="btn btn-sm btn-secondary" onclick="resetUserUsage('${u.id}')">Reset</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteUser('${u.id}')">Del</button>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        // Add / Edit Subscriber Modals
+        function openAddUserModal() {
+            document.getElementById('modal-user-title').textContent = 'Add New Subscriber';
+            document.getElementById('form-user').reset();
+            document.getElementById('user-edit-id').value = '';
+            document.getElementById('modal-user').classList.add('open');
+        }
+        function closeUserModal() {
+            document.getElementById('modal-user').classList.remove('open');
+        }
+
+        document.getElementById('form-user').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const editId = document.getElementById('user-edit-id').value;
+            const name = document.getElementById('form-user-name').value.trim();
+            const limitGb = parseFloat(document.getElementById('form-user-limit-gb').value) || 0;
+            const expiryStr = document.getElementById('form-user-expiry').value;
+            const cleanIp = document.getElementById('form-user-clean-ip').value.trim();
+
+            const limitTotalReq = limitGb > 0 ? Math.round((limitGb * 1073741824) / 6000) : 0;
+            const expiryMs = expiryStr ? new Date(expiryStr).getTime() : 0;
+
+            const payload = {
+                name,
+                limitTotalReq,
+                expiryMs,
+                cleanIp,
+            };
+
+            const method = editId ? 'PUT' : 'POST';
+            const endpoint = editId ? `/${state.apiRoute}/api/users?id=${editId}` : `/${state.apiRoute}/api/users`;
+
+            try {
+                const res = await fetch(endpoint, {
+                    method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + state.masterKey
+                    },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    closeUserModal();
+                    loadSubscribers();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (err) {
+                alert('Request failed: ' + err.message);
+            }
+        });
+
+        async function toggleUserPause(id) {
+            await fetch(`/${state.apiRoute}/api/users?id=${id}&action=toggle`, {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + state.masterKey }
+            });
+            loadSubscribers();
+        }
+
+        async function resetUserUsage(id) {
+            if (!confirm('Reset bandwidth usage counters for this subscriber?')) return;
+            await fetch(`/${state.apiRoute}/api/users?id=${id}&action=reset`, {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + state.masterKey }
+            });
+            loadSubscribers();
+        }
+
+        async function deleteUser(id) {
+            if (!confirm('Permanently delete this subscriber?')) return;
+            await fetch(`/${state.apiRoute}/api/users?id=${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + state.masterKey }
+            });
+            loadSubscribers();
+        }
+
+        // Links Export Modal
+        function showLinksModal(id, name) {
+            const base = location.origin;
+            const route = state.config.apiRoute || state.apiRoute;
+            const subParam = `sub=${encodeURIComponent(name)}`;
+            const portalParam = `u=${encodeURIComponent(name)}`;
+
+            const links = [
+                { label: 'Sing-Box 1.9+ JSON', url: `${base}/${route}?flag=singbox&${subParam}` },
+                { label: 'Clash / Mihomo YAML', url: `${base}/${route}?flag=clash&${subParam}` },
+                { label: 'Xray / V2Ray JSON', url: `${base}/${route}?flag=v2ray&${subParam}` },
+                { label: 'WireGuard / AWG CONF', url: `${base}/${route}?flag=wireguard&${subParam}` },
+                { label: 'Raw Plaintext URI', url: `${base}/${route}?flag=raw&${subParam}` },
+                { label: 'Subscriber Web Portal', url: `${base}/${route}?${portalParam}` },
+            ];
+
+            const html = links.map(l => `
+                <div style="background:var(--bg-input); padding: 10px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                    <div style="font-weight:600; font-size:0.8rem; color:var(--text-muted); margin-bottom: 4px;">${l.label}</div>
+                    <div style="display:flex; gap: 8px;">
+                        <input type="text" readonly value="${l.url}" class="input" style="font-size:0.78rem; padding: 5px 8px;">
+                        <button class="btn btn-sm btn-secondary" onclick="copyText('${l.url}', this)">Copy</button>
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('modal-links-content').innerHTML = html;
+            document.getElementById('modal-links').classList.add('open');
+        }
+        function closeLinksModal() {
+            document.getElementById('modal-links').classList.remove('open');
+        }
+
+        function copyText(text, btn) {
+            navigator.clipboard.writeText(text).then(() => {
+                const prev = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => btn.textContent = prev, 1500);
+            });
+        }
+
+        // System Configuration View
+        function populateSettings(cfg) {
+            if (!cfg) return;
+            document.getElementById('cfg-api-route').value = cfg.apiRoute || 'sync';
+            document.getElementById('cfg-mode').value = cfg.mode || 'alpha';
+            document.getElementById('cfg-custom-dns').value = cfg.customDns || 'https://cloudflare-dns.com/dns-query';
+            document.getElementById('cfg-clean-ips').value = cfg.cleanIps || '';
+            document.getElementById('cfg-backup-relay').value = cfg.backupRelay || cfg.customRelay || '';
+        }
+
+        document.getElementById('settings-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const newKey = document.getElementById('cfg-master-key').value.trim();
+            const payload = {
+                ...state.config,
+                apiRoute: document.getElementById('cfg-api-route').value.trim() || 'sync',
+                mode: document.getElementById('cfg-mode').value,
+                customDns: document.getElementById('cfg-custom-dns').value.trim(),
+                cleanIps: document.getElementById('cfg-clean-ips').value.trim(),
+                backupRelay: document.getElementById('cfg-backup-relay').value.trim(),
+            };
+
+            if (newKey) {
+                payload.masterKey = newKey;
+            }
+
+            try {
+                const res = await fetch(`/${state.apiRoute}/api/sync`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + state.masterKey
+                    },
+                    body: JSON.stringify({ key: state.masterKey, config: payload })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('System configuration updated successfully.');
+                    if (newKey) {
+                        state.masterKey = newKey;
+                        localStorage.setItem('luci_session', JSON.stringify({ key: newKey }));
+                    }
+                    state.config = payload;
+                } else {
+                    alert('Save failed: ' + data.error);
+                }
+            } catch (err) {
+                alert('Save failed: ' + err.message);
+            }
+        });
+
+        function exportSharedSettings() {
+            window.open(`/${state.apiRoute}/share-settings`, '_blank');
+        }
+
+        // Diagnostics View
+        async function runProxyIpProbe() {
+            const target = document.getElementById('diag-target-ip').value.trim();
+            const resConsole = document.getElementById('diag-results');
+            if (!target) {
+                resConsole.textContent = 'Please enter an IP or hostname.';
+                return;
+            }
+            resConsole.textContent = `Probing ${target}:443 across 5 TCP connections...`;
+            try {
+                const res = await fetch(`/${state.apiRoute}/api/proxy-ip/test?target=${encodeURIComponent(target)}`, {
+                    headers: { 'Authorization': 'Bearer ' + state.masterKey }
+                });
+                const data = await res.json();
+                resConsole.textContent = JSON.stringify(data, null, 2);
+            } catch (err) {
+                resConsole.textContent = 'Probe error: ' + err.message;
+            }
+        }
+
+        // Logs View
+        async function loadAuditLogs() {
+            const consoleElem = document.getElementById('audit-logs-console');
+            consoleElem.textContent = 'Loading activity records...';
+            try {
+                const res = await fetch(`/${state.apiRoute}/api/logs`, {
+                    headers: { 'Authorization': 'Bearer ' + state.masterKey }
+                });
+                const data = await res.json();
+                if (Array.isArray(data.logs) && data.logs.length > 0) {
+                    consoleElem.textContent = data.logs.map(l =>
+                        `[${new Date(l.ts).toLocaleTimeString()}] ${l.type.toUpperCase()}: ${l.detail}`
+                    ).join('\n');
+                } else {
+                    consoleElem.textContent = 'No audit records logged yet.';
+                }
+            } catch (err) {
+                consoleElem.textContent = 'Failed to load logs: ' + err.message;
+            }
+        }
+
+        async function clearAuditLogs() {
+            if (!confirm('Clear all audit activity records?')) return;
+            await fetch(`/${state.apiRoute}/api/logs`, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + state.masterKey }
+            });
+            loadAuditLogs();
+        }
+
+        function escapeHtml(str) {
+            return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+    </script>
+</body>
+</html>
