@@ -1,0 +1,18 @@
+{
+  "name": "luciproxy",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "d1_databases": [
+    {
+      "binding": "IOT_DB",
+      "database_name": "luciproxy-db",
+      "database_id": "your-d1-database-id"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}

@@ -42,8 +42,12 @@ accounts.json
 *.key
 
 # Separate Projects & External References
-Builder/
 Source-cods/
+
+# PyInstaller & Build Artifacts
+*.spec
+Builder/dist/
+Builder/build/
 
 # Scratch & Diagnostics
 scratch/

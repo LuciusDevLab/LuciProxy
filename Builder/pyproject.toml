@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "luciproxy-builder"
+version = "1.1.0"
+description = "LuciProxy Builder - Cloudflare Edge Deployment Automation Tool"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "requests>=2.28.0",
+    "keyring>=24.0.0",
+    "colorama>=0.4.6"
+]
+
+[project.scripts]
+luciproxy-builder = "src.main:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
