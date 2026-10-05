@@ -17,6 +17,8 @@ import { getConfigName, getFakeConfigNames } from "./tags.js";
 import { buildClashRules } from "./routing.js";
 import { resolveFinalMask, formatClashFragmentYaml } from "./finalmask.js";
 
+import { resolveNetworkPolicy } from "./policy.js";
+
 export async function buildYamlProfile(hostName, targetSub = null, allowInsecure = false, sysConfig) {
     const ports = sysConfig.socketPorts
         ? sysConfig.socketPorts
@@ -26,8 +28,12 @@ export async function buildYamlProfile(hostName, targetSub = null, allowInsecure
         : ["443"];
     const reqPath = encodeURI(`/${sysConfig.apiRoute}`);
 
+    const policy = resolveNetworkPolicy(sysConfig, "PROXIES");
+    const dnsPolicy = policy.dns;
+
     const proxies = [];
-    const proxyNames = [];
+    const realProxyNames = [];
+    const fakeProxyNames = [];
     const nameCounts = {};
 
     const getUniqueName = (baseName) => {
@@ -56,10 +62,10 @@ export async function buildYamlProfile(hostName, targetSub = null, allowInsecure
     server: 127.0.0.1
     port: 80
     password: "${sysConfig.deviceId || 'luciproxy'}"
-    udp: true
+    udp: false
     tls: false`
         );
-        proxyNames.push(`"${uName}"`);
+        fakeProxyNames.push(`"${uName}"`);
     });
 
     // 2. Iterate profiles
@@ -94,6 +100,7 @@ export async function buildYamlProfile(hostName, targetSub = null, allowInsecure
             effectivePorts.forEach((port) => {
                 const sec = getTransportParams(port) === "tls" ? "true" : "false";
                 const clashFragYaml = formatClashFragmentYaml(resolvedFm, sec === "true", "    ");
+                const ipVersion = dnsPolicy.enableIPv6 ? "ipv4-prefer" : "ipv4";
 
                 ips.forEach((ip) => {
                     const _pips = pips.length > 0 ? pips : [null];
@@ -111,7 +118,8 @@ export async function buildYamlProfile(hostName, targetSub = null, allowInsecure
     server: ${ip}
     port: ${port}
     uuid: "${p.id}"
-    udp: true
+    ip-version: ${ipVersion}
+    udp: false
     tls: ${sec}
     network: ws
     servername: ${hName}
@@ -124,7 +132,7 @@ export async function buildYamlProfile(hostName, targetSub = null, allowInsecure
       early-data-header-name: Sec-WebSocket-Protocol
       max-early-data: 2560${clashFragYaml}`
                             );
-                            proxyNames.push(`"${vName}"`);
+                            realProxyNames.push(`"${vName}"`);
                             configIndex++;
                         }
 
@@ -139,7 +147,8 @@ export async function buildYamlProfile(hostName, targetSub = null, allowInsecure
     server: ${ip}
     port: ${port}
     password: "${p.id}"
-    udp: true
+    ip-version: ${ipVersion}
+    udp: false
     tls: ${sec}
     network: ws
     sni: ${hName}
@@ -152,7 +161,7 @@ export async function buildYamlProfile(hostName, targetSub = null, allowInsecure
       early-data-header-name: Sec-WebSocket-Protocol
       max-early-data: 2560${clashFragYaml}`
                             );
-                            proxyNames.push(`"${tName}"`);
+                            realProxyNames.push(`"${tName}"`);
                             configIndex++;
                         }
                     });
@@ -161,8 +170,53 @@ export async function buildYamlProfile(hostName, targetSub = null, allowInsecure
         });
     });
 
-    const proxyList = proxyNames.join(", ");
     const clashRules = buildClashRules(sysConfig, "PROXIES");
+    const localDnsTarget = dnsPolicy.isLocalSystem ? "system" : `${dnsPolicy.localDns}#DIRECT`;
+    const remoteDnsTarget = `${dnsPolicy.remoteDns}#PROXIES`;
+
+    // Build nameserver-policy for sanction and domestic domains
+    const nameserverPolicyLines = [];
+    if (sysConfig.bypassAi || sysConfig.bypassOpenAi) {
+        nameserverPolicyLines.push(`    "rule-set:openai": "${dnsPolicy.antiSanctionDns}#DIRECT"`);
+        nameserverPolicyLines.push(`    "+.openai.com": "${dnsPolicy.antiSanctionDns}#DIRECT"`);
+        nameserverPolicyLines.push(`    "+.chatgpt.com": "${dnsPolicy.antiSanctionDns}#DIRECT"`);
+    }
+    if (sysConfig.bypassIran) {
+        nameserverPolicyLines.push(`    "rule-set:ir": "${localDnsTarget}"`);
+        nameserverPolicyLines.push(`    "+.ir": "${localDnsTarget}"`);
+    }
+
+    // Build static host bootstrap lines
+    const hostLines = [];
+    if (dnsPolicy.bootstrapHosts && Object.keys(dnsPolicy.bootstrapHosts).length > 0) {
+        Object.entries(dnsPolicy.bootstrapHosts).forEach(([domain, ips]) => {
+            hostLines.push(`    "${domain}": [${ips.map((ip) => `"${ip}"`).join(", ")}]`);
+        });
+    }
+    if (sysConfig.blockThreats) {
+        hostLines.push(`    "+.doubleclick.net": "rcode://refused"`);
+        hostLines.push(`    "+.coin-hive.com": "rcode://refused"`);
+    }
+
+    // Build rule providers
+    const clashRuleSets = policy.ruleSets.filter((r) => r.clash && r.clash.geositeUrl);
+    const ruleProviderBlocks = [];
+    clashRuleSets.forEach((r) => {
+        ruleProviderBlocks.push(
+`  ${r.clash.geosite}:
+    type: http
+    behavior: domain
+    format: ${r.clash.format || 'text'}
+    path: ./ruleset/${r.clash.geosite}.${r.clash.format === 'yaml' ? 'yaml' : 'txt'}
+    url: "${r.clash.geositeUrl}"
+    interval: 86400
+    proxy: DIRECT`
+        );
+    });
+
+    const allProxyNames = [...realProxyNames, ...fakeProxyNames];
+    const allProxyListYaml = allProxyNames.map((n) => `      - ${n}`).join("\n");
+    const realProxyListYaml = realProxyNames.map((n) => `      - ${n}`).join("\n");
 
     return `# LuciProxy Mihomo / Clash Configuration
 # Generated on: ${new Date().toISOString()}
@@ -172,17 +226,50 @@ socks-port: 7891
 allow-lan: true
 mode: rule
 log-level: info
-ipv6: true
+ipv6: ${dnsPolicy.enableIPv6}
 
 dns:
   enable: true
-  listen: 0.0.0.0:53
-  enhanced-mode: fake-ip
+  respect-rules: true
+  use-system-hosts: false
+  listen: 127.0.0.1:1053
+  enhanced-mode: ${dnsPolicy.fakeDns ? "fake-ip" : "redir-host"}${dnsPolicy.fakeDns ? `
   fake-ip-range: 198.18.0.1/16
+  fake-ip-filter:
+    - "+.lan"
+    - "+.local"` : ""}
   nameserver:
-    - 1.1.1.1
-    - 8.8.8.8
-    - https://cloudflare-dns.com/dns-query
+    - ${remoteDnsTarget}
+  proxy-server-nameserver:
+    - ${localDnsTarget}
+  direct-nameserver:
+    - ${localDnsTarget}
+  direct-nameserver-follow-policy: true
+${nameserverPolicyLines.length > 0 ? `  nameserver-policy:\n${nameserverPolicyLines.join("\n")}` : ""}
+${hostLines.length > 0 ? `  hosts:\n${hostLines.join("\n")}` : ""}
+
+sniffer:
+  enable: true
+  force-dns-mapping: true
+  parse-pure-ip: true
+  override-destination: true
+  sniff:
+    HTTP:
+      ports: [80, 8080, 8880, 2052, 2082, 2086, 2095]
+    TLS:
+      ports: [443, 8443, 2053, 2083, 2087, 2096]
+
+${sysConfig.enableTun ? `tun:
+  enable: true
+  stack: mixed
+  auto-route: true
+  strict-route: true
+  auto-detect-interface: true
+  dns-hijack:
+    - "any:53"
+    - "tcp://any:53"
+  mtu: 9000` : `tun:
+  enable: false`}
 
 proxies:
 ${proxies.join("\n")}
@@ -192,25 +279,22 @@ proxy-groups:
     type: select
     proxies:
       - "AUTO"
-      - "FALLBACK"
-      ${proxyNames.map((n) => `    - ${n}`).join("\n")}
+      - "FALLBACK"${allProxyListYaml ? "\n" + allProxyListYaml : ""}
 
   - name: "AUTO"
     type: url-test
     url: http://www.gstatic.com/generate_204
     interval: 300
     tolerance: 50
-    proxies:
-      ${proxyNames.map((n) => `    - ${n}`).join("\n")}
+    proxies:${realProxyListYaml ? "\n" + realProxyListYaml : ""}
 
   - name: "FALLBACK"
     type: fallback
     url: http://www.gstatic.com/generate_204
     interval: 300
-    proxies:
-      ${proxyNames.map((n) => `    - ${n}`).join("\n")}
+    proxies:${realProxyListYaml ? "\n" + realProxyListYaml : ""}
 
-rules:
+${ruleProviderBlocks.length > 0 ? `rule-providers:\n${ruleProviderBlocks.join("\n")}\n` : ""}rules:
 ${clashRules.map((r) => `  - ${r}`).join("\n")}
 `;
 }

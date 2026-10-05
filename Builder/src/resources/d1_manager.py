@@ -168,8 +168,10 @@ class D1Manager:
             "maintenanceHost": "https://www.ubuntu.com, https://www.docker.com",
             "cleanIps": "",
             "socketPorts": "443",
-            "customDns": "https://cloudflare-dns.com/dns-query",
-            "resolveIp": "1.1.1.1",
+            "customDns": "https://8.8.8.8/dns-query",
+            "resolveIp": "8.8.8.8",
+            "localDns": "8.8.8.8",
+            "remoteDns": "https://8.8.8.8/dns-query",
             "users": []
         }
 

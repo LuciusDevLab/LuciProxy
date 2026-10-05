@@ -1,4 +1,4 @@
-// ../LuciProxy/src/config.js
+// LuciProxy/src/config.js
 var CURRENT_VERSION = "1.1.0";
 var DEFAULT_ECH_CONFIGS = [
   "cloudflare-ech.com+udp://1.1.1.1",
@@ -77,8 +77,8 @@ var SYSTEM_DEFAULTS = {
   // "alpha" = vless, "beta" = trojan, "both" = dual protocol
   agent: "chrome",
   socketPorts: "443",
-  customDns: "https://cloudflare-dns.com/dns-query",
-  resolveIp: "1.1.1.1",
+  customDns: "https://8.8.8.8/dns-query",
+  resolveIp: "8.8.8.8",
   cascade: "",
   enableOpt1: false,
   // ECH
@@ -133,6 +133,33 @@ var SYSTEM_DEFAULTS = {
   bypassAi: false,
   bypassDev: false,
   blockThreats: false,
+  // Canonical Network Policy & Routing Defaults
+  localDns: "8.8.8.8",
+  remoteDns: "https://8.8.8.8/dns-query",
+  antiSanctionDns: "178.22.122.100",
+  fakeDns: false,
+  enableIPv6: false,
+  blockMalware: false,
+  blockPhishing: false,
+  blockCryptominers: false,
+  blockAds: false,
+  blockPorn: false,
+  bypassIran: false,
+  bypassChina: false,
+  bypassRussia: false,
+  bypassOpenAi: false,
+  bypassGoogleAi: false,
+  bypassMicrosoft: false,
+  bypassOracle: false,
+  bypassDocker: false,
+  bypassAdobe: false,
+  bypassEpicGames: false,
+  bypassIntel: false,
+  bypassAmd: false,
+  bypassNvidia: false,
+  customBypassRules: [],
+  customBlockRules: [],
+  customBypassSanctionRules: [],
   warpEndpoints: ["engage.cloudflareclient.com:2408"],
   warpRemoteDNS: "1.1.1.1",
   warpPrivateKey: "",
@@ -141,6 +168,7 @@ var SYSTEM_DEFAULTS = {
   amneziaNoiseCount: 5,
   amneziaNoiseSizeMin: 50,
   amneziaNoiseSizeMax: 100,
+  enableTun: false,
   prefixes: ["[2a02:898:146:64::]", "[2602:fc59:b0:64::]", "[2602:fc59:11:64::]"]
 };
 var REQ_BYTES_EST2 = 1073741824 / 6e3;
@@ -149,10 +177,11 @@ var CACHE_TTL_USAGE = 1e4;
 var CACHE_TTL_BACKUP_IP = 3e4;
 var TCP_OPEN_TIMEOUT_MS = 5e3;
 var UPSTREAM_WRITE_TIMEOUT_MS = 15e3;
+var DOWNSTREAM_READ_TIMEOUT_MS = 3e4;
 var UPSTREAM_QUEUE_MAX_BYTES = 4 * 1024 * 1024;
 var UPSTREAM_QUEUE_MAX_ITEMS = 256;
 
-// ../LuciProxy/src/db/d1.js
+// LuciProxy/src/db/d1.js
 var StateStore = class {
   constructor() {
     this.memoryMap = /* @__PURE__ */ new Map();
@@ -356,7 +385,7 @@ function setCachedUsage(newUsage) {
   store.usageTimestamp = Date.now();
 }
 
-// ../LuciProxy/src/api/logs.js
+// LuciProxy/src/api/logs.js
 var inMemoryLogs = [];
 async function logActivity(env, type, detail) {
   const entry = {
@@ -394,7 +423,7 @@ async function handleLogs(request, env) {
   });
 }
 
-// ../LuciProxy/src/utils/helpers.js
+// LuciProxy/src/utils/helpers.js
 var INFLIGHT_HTTP = 0;
 var OPEN_WS = 0;
 function incrementInflightHttp() {
@@ -557,7 +586,7 @@ function convertToNAT64IPv6(ipv4Address, prefix) {
   }
 }
 
-// ../LuciProxy/src/users/manager.js
+// LuciProxy/src/users/manager.js
 var activeConns = /* @__PURE__ */ new Map();
 var uuidUsage = /* @__PURE__ */ new Map();
 var lastPersistenceSyncTime = 0;
@@ -1000,7 +1029,7 @@ async function handleSubSetIp(request, env, ctx, sysConfig) {
   }
 }
 
-// ../LuciProxy/src/auth/auth.js
+// LuciProxy/src/auth/auth.js
 var LOGIN_ATTEMPTS = /* @__PURE__ */ new Map();
 var LOGIN_FAIL_LIMIT = 15;
 var LOGIN_WINDOW_MS = 15 * 60 * 1e3;
@@ -1186,7 +1215,7 @@ New Subscription: <code>/${newSubPath}</code>`;
   };
 }
 
-// ../LuciProxy/src/api/sync.js
+// LuciProxy/src/api/sync.js
 async function handleConfigSync(request, env, ctx, sysConfig) {
   try {
     const data = await request.json();
@@ -1242,7 +1271,7 @@ async function handleConfigSync(request, env, ctx, sysConfig) {
   }
 }
 
-// ../LuciProxy/src/api/stats.js
+// LuciProxy/src/api/stats.js
 async function handleStatsApi(request, env, sysConfig) {
   try {
     const ip = request.headers.get("cf-connecting-ip") || "Unknown";
@@ -1374,7 +1403,7 @@ async function getCfWorkerUsage(env, sysConfig, hostname) {
   }
 }
 
-// ../LuciProxy/src/protocols/vless.js
+// LuciProxy/src/protocols/vless.js
 function parseVlessHeader(bufferData) {
   if (!bufferData || bufferData.byteLength < 24) {
     return { hasError: true, message: "VLESS header too short" };
@@ -1432,7 +1461,7 @@ function parseVlessHeader(bufferData) {
   };
 }
 
-// ../LuciProxy/src/protocols/trojan.js
+// LuciProxy/src/protocols/trojan.js
 function parseTrojanHeader(bufferData) {
   if (!bufferData || bufferData.byteLength < 58) {
     return { hasError: true, message: "Trojan header too short" };
@@ -1499,7 +1528,7 @@ function parseTrojanHeader(bufferData) {
   };
 }
 
-// ../LuciProxy/src/utils/crypto.js
+// LuciProxy/src/utils/crypto.js
 var SHA256_K = new Uint32Array([
   1116352408,
   1899447441,
@@ -1667,7 +1696,214 @@ function decodeConfigUuid(compositeUuid) {
   };
 }
 
-// ../LuciProxy/src/protocols/proxy.js
+// LuciProxy/src/protocols/dns_resolver.js
+var dnsCache = /* @__PURE__ */ new Map();
+var CACHE_TTL_MS = 6e4;
+function encodeDnsQuery(hostname, qtype = 1) {
+  const cleanHost = String(hostname || "").trim().toLowerCase();
+  const labels = cleanHost.split(".").filter(Boolean);
+  let qnameLen = 1;
+  for (const label of labels) {
+    qnameLen += 1 + label.length;
+  }
+  const buffer = new Uint8Array(12 + qnameLen + 4);
+  const view = new DataView(buffer.buffer);
+  view.setUint16(0, 4660);
+  view.setUint16(2, 256);
+  view.setUint16(4, 1);
+  view.setUint16(6, 0);
+  view.setUint16(8, 0);
+  view.setUint16(10, 0);
+  let offset = 12;
+  for (const label of labels) {
+    buffer[offset++] = label.length;
+    for (let i = 0; i < label.length; i++) {
+      buffer[offset++] = label.charCodeAt(i);
+    }
+  }
+  buffer[offset++] = 0;
+  view.setUint16(offset, qtype);
+  offset += 2;
+  view.setUint16(offset, 1);
+  return buffer;
+}
+function parseDnsResponse(responseBuffer, expectedType = 1) {
+  if (!responseBuffer) return [];
+  const buffer = responseBuffer instanceof Uint8Array ? responseBuffer : new Uint8Array(responseBuffer);
+  if (buffer.byteLength < 12) return [];
+  const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  const flags = view.getUint16(2);
+  const rcode = flags & 15;
+  if (rcode !== 0) return [];
+  const qdcount = view.getUint16(4);
+  const ancount = view.getUint16(6);
+  if (ancount === 0) return [];
+  let offset = 12;
+  function skipName(pos) {
+    while (pos < buffer.byteLength) {
+      const len = buffer[pos];
+      if (len === 0) return pos + 1;
+      if ((len & 192) === 192) {
+        return pos + 2;
+      }
+      pos += 1 + len;
+    }
+    return pos;
+  }
+  for (let q = 0; q < qdcount; q++) {
+    offset = skipName(offset);
+    offset += 4;
+    if (offset > buffer.byteLength) return [];
+  }
+  const ips = [];
+  for (let a = 0; a < ancount && offset < buffer.byteLength; a++) {
+    offset = skipName(offset);
+    if (offset + 10 > buffer.byteLength) break;
+    const type = view.getUint16(offset);
+    const rdLength = view.getUint16(offset + 8);
+    offset += 10;
+    if (offset + rdLength > buffer.byteLength) break;
+    if (type === 1 && expectedType === 1 && rdLength === 4) {
+      const ip = `${buffer[offset]}.${buffer[offset + 1]}.${buffer[offset + 2]}.${buffer[offset + 3]}`;
+      ips.push(ip);
+    } else if (type === 28 && expectedType === 28 && rdLength === 16) {
+      const parts = [];
+      for (let i = 0; i < 8; i++) {
+        parts.push(view.getUint16(offset + i * 2).toString(16));
+      }
+      ips.push(parts.join(":"));
+    }
+    offset += rdLength;
+  }
+  return ips;
+}
+function uint8ArrayToBase64Url(u8) {
+  if (!u8) return "";
+  const arr = u8 instanceof Uint8Array ? u8 : new Uint8Array(u8);
+  let binary = "";
+  for (let i = 0; i < arr.byteLength; i++) {
+    binary += String.fromCharCode(arr[i]);
+  }
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+async function resolveDomainDoh(domain, dohUrl, recordType = "A", timeoutMs = 5e3, fallbackDohUrl = "https://8.8.8.8/dns-query") {
+  if (!domain || !dohUrl) return null;
+  const cleanDomain = domain.trim().toLowerCase();
+  const cacheKey = `${cleanDomain}:${recordType}:${dohUrl}`;
+  const cached = dnsCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    return cached.ip;
+  }
+  const isV6 = recordType === "AAAA";
+  const qtype = isV6 ? 28 : 1;
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(dohUrl);
+  } catch {
+    if (fallbackDohUrl && fallbackDohUrl !== dohUrl) {
+      return resolveDomainDoh(cleanDomain, fallbackDohUrl, recordType, timeoutMs, null);
+    }
+    return null;
+  }
+  const tryFallback = async () => {
+    if (fallbackDohUrl && fallbackDohUrl !== dohUrl) {
+      return await resolveDomainDoh(cleanDomain, fallbackDohUrl, recordType, timeoutMs, null);
+    }
+    return null;
+  };
+  const isJsonEndpoint = parsedUrl.pathname.endsWith("/resolve") || parsedUrl.searchParams.get("format") === "json";
+  try {
+    if (isJsonEndpoint) {
+      const targetUrl = new URL(dohUrl);
+      targetUrl.searchParams.set("name", cleanDomain);
+      targetUrl.searchParams.set("type", recordType);
+      const res = await fetchT(targetUrl.toString(), {
+        method: "GET",
+        headers: { "Accept": "application/dns-json" }
+      }, timeoutMs);
+      if (!res.ok) return await tryFallback();
+      const data = await res.json();
+      if (data && data.Answer && data.Answer.length > 0) {
+        const match = data.Answer.find((ans) => ans.type === qtype);
+        const resolvedIp = match ? match.data : data.Answer[0].data;
+        if (resolvedIp) {
+          dnsCache.set(cacheKey, { ip: resolvedIp, timestamp: Date.now() });
+          return resolvedIp;
+        }
+      }
+      return await tryFallback();
+    } else {
+      const wireQuery = encodeDnsQuery(cleanDomain, qtype);
+      const b64 = uint8ArrayToBase64Url(wireQuery);
+      const queryUrl = new URL(dohUrl);
+      queryUrl.searchParams.set("dns", b64);
+      const res = await fetchT(queryUrl.toString(), {
+        method: "GET",
+        headers: {
+          "Accept": "application/dns-message"
+        }
+      }, timeoutMs);
+      if (!res.ok) return await tryFallback();
+      const bodyBuf = await res.arrayBuffer();
+      const ips = parseDnsResponse(bodyBuf, qtype);
+      if (ips.length > 0) {
+        const resolvedIp = ips[0];
+        dnsCache.set(cacheKey, { ip: resolvedIp, timestamp: Date.now() });
+        return resolvedIp;
+      }
+      return await tryFallback();
+    }
+  } catch {
+    return await tryFallback();
+  }
+}
+async function forwardUdpDnsPacket(rawPayload, isVless, sysConfig = {}) {
+  if (!rawPayload) return null;
+  const view = rawPayload instanceof Uint8Array ? rawPayload : new Uint8Array(rawPayload);
+  if (view.byteLength < 2) return null;
+  let dnsQueryBytes = null;
+  if (isVless) {
+    const pktLen = view[0] << 8 | view[1];
+    if (view.byteLength >= 2 + pktLen && pktLen > 0) {
+      dnsQueryBytes = view.slice(2, 2 + pktLen);
+    } else if (view.byteLength > 2) {
+      dnsQueryBytes = view.slice(2);
+    }
+  } else {
+    if (view.byteLength >= 12) {
+      dnsQueryBytes = view;
+    }
+  }
+  if (!dnsQueryBytes || dnsQueryBytes.byteLength < 12) return null;
+  const dohUrl = sysConfig.customDns || sysConfig.remoteDns || "https://8.8.8.8/dns-query";
+  try {
+    const b64 = uint8ArrayToBase64Url(dnsQueryBytes);
+    const queryUrl = new URL(dohUrl);
+    queryUrl.searchParams.set("dns", b64);
+    const res = await fetchT(queryUrl.toString(), {
+      method: "GET",
+      headers: {
+        "Accept": "application/dns-message"
+      }
+    }, 5e3);
+    if (!res.ok) return null;
+    const answerBuffer = await res.arrayBuffer();
+    const answerBytes = new Uint8Array(answerBuffer);
+    if (isVless) {
+      const resp = new Uint8Array(2 + answerBytes.byteLength);
+      resp[0] = answerBytes.byteLength >> 8 & 255;
+      resp[1] = answerBytes.byteLength & 255;
+      resp.set(answerBytes, 2);
+      return resp;
+    } else {
+      return answerBytes;
+    }
+  } catch {
+    return null;
+  }
+}
+
+// LuciProxy/src/protocols/proxy.js
 var customSocketConnector = null;
 async function resolveConnectFunction() {
   if (customSocketConnector) return customSocketConnector;
@@ -1754,6 +1990,8 @@ async function startDataPipe(webSocket, env, ctx, relayIndex, sysConfig, earlyDa
   webSocket.addEventListener("close", teardown);
   webSocket.addEventListener("error", () => {
   });
+  let isUdpDns = false;
+  let isVlessSession = false;
   async function dispatchChunk(chunkBuffer) {
     if (isInitialPacket) {
       isInitialPacket = false;
@@ -1766,6 +2004,22 @@ async function startDataPipe(webSocket, env, ctx, relayIndex, sysConfig, earlyDa
         return;
       }
       authenticatedUserKey = session.activeClientHash;
+      isVlessSession = Boolean(session.isVless);
+      if (session.isUdpDns) {
+        isUdpDns = true;
+        if (session.isVless) {
+          webSocket.send(new Uint8Array([0, 0]));
+        }
+        if (session.firstChunk) {
+          const dnsAns = await forwardUdpDnsPacket(session.firstChunk, session.isVless, sysConfig);
+          if (dnsAns) {
+            webSocket.send(dnsAns);
+            uploadedBytes += session.firstChunk.byteLength || 0;
+            downloadedBytes += dnsAns.byteLength || 0;
+          }
+        }
+        return;
+      }
       remoteSocket = session.remoteSocket;
       socketWriter = remoteSocket?.writable?.getWriter();
       if (session.isVless) {
@@ -1778,6 +2032,13 @@ async function startDataPipe(webSocket, env, ctx, relayIndex, sysConfig, earlyDa
       pumpDownstream(remoteSocket, webSocket, (chunkSize) => {
         downloadedBytes += chunkSize;
       });
+    } else if (isUdpDns) {
+      const dnsAns = await forwardUdpDnsPacket(chunkBuffer, isVlessSession, sysConfig);
+      if (dnsAns) {
+        webSocket.send(dnsAns);
+        uploadedBytes += chunkBuffer.byteLength || 0;
+        downloadedBytes += dnsAns.byteLength || 0;
+      }
     } else if (socketWriter) {
       await withDeadline(
         socketWriter.write(chunkBuffer),
@@ -1825,18 +2086,35 @@ async function startDataPipe(webSocket, env, ctx, relayIndex, sysConfig, earlyDa
     });
   });
 }
-async function pumpDownstream(remoteSocket, clientWebSocket, onBytesTransferred) {
+async function pumpDownstream(remoteSocket, clientWebSocket, onBytesTransferred, readTimeoutMs = DOWNSTREAM_READ_TIMEOUT_MS) {
   if (!remoteSocket?.readable) return;
   try {
     const socketReader = remoteSocket.readable.getReader();
     while (true) {
-      const { value, done } = await socketReader.read();
-      if (done) break;
-      if (value) {
-        clientWebSocket.send(value);
-        if (typeof onBytesTransferred === "function") {
-          onBytesTransferred(value.byteLength || 0);
+      let timer = null;
+      const timeoutPromise = new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          const err = new Error(`Downstream socket read timed out after ${readTimeoutMs}ms of inactivity`);
+          err.name = "InactivityTimeoutError";
+          reject(err);
+        }, readTimeoutMs);
+      });
+      try {
+        const { value, done } = await Promise.race([
+          socketReader.read(),
+          timeoutPromise
+        ]);
+        if (timer) clearTimeout(timer);
+        if (done) break;
+        if (value) {
+          clientWebSocket.send(value);
+          if (typeof onBytesTransferred === "function") {
+            onBytesTransferred(value.byteLength || 0);
+          }
         }
+      } catch (err) {
+        if (timer) clearTimeout(timer);
+        throw err;
       }
     }
   } catch {
@@ -1854,6 +2132,7 @@ async function parseAndConnect(rawBuffer, relayIndex, sysConfig, env, ctx) {
   let destinationPort = 0;
   let payloadOffset = 0;
   let subscriberToken = "";
+  let isUDP = false;
   if (rawView[0] === 0) {
     isVless = true;
     const vlessHeader = parseVlessHeader(rawBuffer);
@@ -1862,6 +2141,7 @@ async function parseAndConnect(rawBuffer, relayIndex, sysConfig, env, ctx) {
     destinationPort = vlessHeader.targetPort;
     payloadOffset = vlessHeader.offset;
     subscriberToken = vlessHeader.clientUuidHex;
+    isUDP = Boolean(vlessHeader.isUDP);
   } else {
     const trojanHeader = parseTrojanHeader(rawBuffer);
     if (trojanHeader.hasError) return { hasError: true };
@@ -1869,6 +2149,7 @@ async function parseAndConnect(rawBuffer, relayIndex, sysConfig, env, ctx) {
     destinationPort = trojanHeader.targetPort;
     payloadOffset = trojanHeader.offset;
     subscriberToken = trojanHeader.clientHashHex;
+    isUDP = Boolean(trojanHeader.isUDP);
   }
   const activeProfiles = getAllProfiles(sysConfig);
   let matchingProfile = null;
@@ -1903,6 +2184,24 @@ async function parseAndConnect(rawBuffer, relayIndex, sysConfig, env, ctx) {
   trackingMetrics.connects++;
   trackingMetrics.last = Date.now();
   uuidUsage.set(clientKey, trackingMetrics);
+  if (isUDP) {
+    if (destinationPort === 53) {
+      const firstChunk2 = payloadOffset < rawBuffer.byteLength ? rawBuffer.slice(payloadOffset) : null;
+      return {
+        hasError: false,
+        isVless,
+        isUdpDns: true,
+        activeClientHash: clientKey,
+        firstChunk: firstChunk2
+      };
+    } else {
+      return {
+        hasError: true,
+        isUdpRejected: true,
+        message: "UDP proxying only supported for DNS (port 53)"
+      };
+    }
+  }
   const connectProvider = await resolveConnectFunction();
   if (!connectProvider) {
     return { hasError: true, message: "Edge sockets capability unavailable" };
@@ -1911,15 +2210,9 @@ async function parseAndConnect(rawBuffer, relayIndex, sysConfig, env, ctx) {
   let resolvedDestination = destinationHost;
   if (sysConfig.customDns && /^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/.test(destinationHost)) {
     try {
-      const dnsEndpoint = new URL(sysConfig.customDns);
-      dnsEndpoint.searchParams.set("name", destinationHost);
-      dnsEndpoint.searchParams.set("type", "A");
-      const dnsResponse = await fetch(dnsEndpoint.toString(), {
-        headers: { accept: "application/dns-json" }
-      });
-      const dnsData = await dnsResponse.json();
-      if (dnsData.Answer && dnsData.Answer.length > 0) {
-        resolvedDestination = dnsData.Answer[0].data;
+      const resolvedIp = await resolveDomainDoh(destinationHost, sysConfig.customDns, "A");
+      if (resolvedIp) {
+        resolvedDestination = resolvedIp;
       }
     } catch {
     }
@@ -2252,7 +2545,7 @@ Connection: close\r
   };
 }
 
-// ../LuciProxy/src/subscriptions/tags.js
+// LuciProxy/src/subscriptions/tags.js
 function getSubscriptionStats(sysConfig, targetSub = null) {
   let name = "Default";
   let id = sysConfig.deviceId || "00000000-0000-4000-8000-000000000000";
@@ -2316,7 +2609,7 @@ function getConfigName(mode, userName, port, hName, ip, selectedProxyIp, configI
   return nameTemplate.replace("{FLAG}", "\u{1F310}").replace("{COUNTRY}", "Global").replace("{CITY}", "Edge").replace("{ISP}", ipName || "CF").replace("{HOST}", hName).replace("{DATE}", today).replace("{WORKER}", prefix).replace("{USER}", userName || "User").replace("{PROTO}", protoLabel).replace("{PORT}", portLabel).replace("{IP}", ip);
 }
 
-// ../LuciProxy/src/subscriptions/finalmask.js
+// LuciProxy/src/subscriptions/finalmask.js
 function parseFinalMask(input) {
   if (!input) return null;
   if (typeof input === "object" && input !== null) {
@@ -2597,7 +2890,7 @@ ${indent}  length: "${length}"
 ${indent}  interval: "${interval}"`;
 }
 
-// ../LuciProxy/src/subscriptions/uri.js
+// LuciProxy/src/subscriptions/uri.js
 function getFragmentQueryParam(sysConfig, profile = null) {
   const mode = (profile?.fragmentMode || sysConfig?.fragmentMode || "").toLowerCase();
   if (!mode || mode === "off" || mode === "none") return "";
@@ -2707,8 +3000,26 @@ async function buildUriProfile(hostName, targetSub = null, allowInsecure = false
   return lines.join("\n");
 }
 
-// ../LuciProxy/src/subscriptions/routing.js
-var AI_DOMAINS = [
+// LuciProxy/src/subscriptions/rules.js
+var PRIVATE_IP_CIDRS = [
+  "10.0.0.0/8",
+  "172.16.0.0/12",
+  "192.168.0.0/16",
+  "127.0.0.0/8",
+  "100.64.0.0/10",
+  "169.254.0.0/16",
+  "fc00::/7",
+  "fe80::/10"
+];
+var CORE_THREAT_DOMAINS = [
+  "doubleclick.net",
+  "adservice.google.com",
+  "pagead2.googlesyndication.com",
+  "coin-hive.com",
+  "coinhive.com",
+  "crypto-loot.com"
+];
+var CORE_AI_DOMAINS = [
   "openai.com",
   "chatgpt.com",
   "ai.com",
@@ -2719,7 +3030,7 @@ var AI_DOMAINS = [
   "deepmind.google",
   "gemini.google.com"
 ];
-var DEV_DOMAINS = [
+var CORE_DEV_DOMAINS = [
   "github.com",
   "githubusercontent.com",
   "gitlab.com",
@@ -2732,15 +3043,432 @@ var DEV_DOMAINS = [
   "adobe.com",
   "epicgames.com"
 ];
-var THREAT_DOMAINS = [
-  "doubleclick.net",
-  "adservice.google.com",
-  "pagead2.googlesyndication.com",
-  "coin-hive.com",
-  "coinhive.com",
-  "crypto-loot.com"
-];
-function buildSingBoxRules(sysConfig = {}, defaultOutbound = "proxy") {
+var RULESET_CATALOG = {
+  // Threat Rule-Sets
+  malware: {
+    category: "threat",
+    singbox: {
+      geosite: "geosite-malware",
+      geoip: "geoip-malware",
+      geositeUrl: "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-malware.srs",
+      geoipUrl: "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geoip-malware.srs"
+    },
+    clash: {
+      geosite: "malware",
+      geoip: "malware-cidr",
+      format: "text",
+      geositeUrl: "https://raw.githubusercontent.com/Chocolate4U/Iran-clash-rules/release/malware.txt",
+      geoipUrl: "https://raw.githubusercontent.com/Chocolate4U/Iran-clash-rules/release/malware-ip.txt"
+    },
+    xray: { geosite: "geosite:malware", geoip: "geoip:malware" }
+  },
+  phishing: {
+    category: "threat",
+    singbox: {
+      geosite: "geosite-phishing",
+      geoip: "geoip-phishing",
+      geositeUrl: "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-phishing.srs",
+      geoipUrl: "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geoip-phishing.srs"
+    },
+    clash: {
+      geosite: "phishing",
+      geoip: "phishing-cidr",
+      format: "text",
+      geositeUrl: "https://raw.githubusercontent.com/Chocolate4U/Iran-clash-rules/release/phishing.txt",
+      geoipUrl: "https://raw.githubusercontent.com/Chocolate4U/Iran-clash-rules/release/phishing-ip.txt"
+    },
+    xray: { geosite: "geosite:phishing", geoip: "geoip:phishing" }
+  },
+  cryptominers: {
+    category: "threat",
+    singbox: {
+      geosite: "geosite-cryptominers",
+      geositeUrl: "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-cryptominers.srs"
+    },
+    clash: {
+      geosite: "cryptominers",
+      format: "text",
+      geositeUrl: "https://raw.githubusercontent.com/Chocolate4U/Iran-clash-rules/release/cryptominers.txt"
+    },
+    xray: { geosite: "geosite:cryptominers" }
+  },
+  ads: {
+    category: "threat",
+    singbox: {
+      geosite: "geosite-category-ads-all",
+      geositeUrl: "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-category-ads-all.srs"
+    },
+    clash: {
+      geosite: "category-ads-all",
+      format: "text",
+      geositeUrl: "https://raw.githubusercontent.com/Chocolate4U/Iran-clash-rules/release/category-ads-all.txt"
+    },
+    xray: { geosite: "geosite:category-ads-all" }
+  },
+  porn: {
+    category: "threat",
+    singbox: {
+      geosite: "geosite-nsfw",
+      geositeUrl: "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-nsfw.srs"
+    },
+    clash: {
+      geosite: "nsfw",
+      format: "text",
+      geositeUrl: "https://raw.githubusercontent.com/Chocolate4U/Iran-clash-rules/release/nsfw.txt"
+    },
+    xray: { geosite: "geosite:category-porn" }
+  },
+  // Domestic Bypass Rule-Sets
+  iran: {
+    category: "domestic",
+    singbox: {
+      geosite: "geosite-ir",
+      geoip: "geoip-ir",
+      geositeUrl: "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-ir.srs",
+      geoipUrl: "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geoip-ir.srs"
+    },
+    clash: {
+      geosite: "ir",
+      geoip: "ir-cidr",
+      format: "text",
+      geositeUrl: "https://raw.githubusercontent.com/Chocolate4U/Iran-clash-rules/release/ir.txt",
+      geoipUrl: "https://raw.githubusercontent.com/Chocolate4U/Iran-clash-rules/release/ircidr.txt"
+    },
+    xray: { geosite: "geosite:category-ir", geoip: "geoip:ir" }
+  },
+  china: {
+    category: "domestic",
+    singbox: {
+      geosite: "geosite-cn",
+      geoip: "geoip-cn",
+      geositeUrl: "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-cn.srs",
+      geoipUrl: "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geoip-cn.srs"
+    },
+    clash: {
+      geosite: "cn",
+      geoip: "cn-cidr",
+      format: "yaml",
+      geositeUrl: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/cn.yaml",
+      geoipUrl: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/cn.yaml"
+    },
+    xray: { geosite: "geosite:cn", geoip: "geoip:cn" }
+  },
+  russia: {
+    category: "domestic",
+    singbox: {
+      geosite: "geosite-category-ru",
+      geoip: "geoip-ru",
+      geositeUrl: "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-category-ru.srs",
+      geoipUrl: "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geoip-ru.srs"
+    },
+    clash: {
+      geosite: "ru",
+      geoip: "ru-cidr",
+      format: "yaml",
+      geositeUrl: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-ru.yaml",
+      geoipUrl: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/ru.yaml"
+    },
+    xray: { geosite: "geosite:category-ru", geoip: "geoip:ru" }
+  },
+  // Sanction Unblocking Rule-Sets
+  openai: {
+    category: "sanction",
+    singbox: {
+      geosite: "geosite-openai",
+      geositeUrl: "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-openai.srs"
+    },
+    clash: {
+      geosite: "openai",
+      format: "yaml",
+      geositeUrl: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/openai.yaml"
+    },
+    xray: { geosite: "geosite:openai" }
+  },
+  googleai: {
+    category: "sanction",
+    singbox: {
+      geosite: "geosite-google-deepmind",
+      geositeUrl: "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-google-deepmind.srs"
+    },
+    clash: {
+      geosite: "google-deepmind",
+      format: "yaml",
+      geositeUrl: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/google-deepmind.yaml"
+    },
+    xray: { geosite: "geosite:google-deepmind" }
+  },
+  microsoft: {
+    category: "sanction",
+    singbox: {
+      geosite: "geosite-microsoft",
+      geositeUrl: "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-microsoft.srs"
+    },
+    clash: {
+      geosite: "microsoft",
+      format: "yaml",
+      geositeUrl: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/microsoft.yaml"
+    },
+    xray: { geosite: "geosite:microsoft" }
+  },
+  docker: {
+    category: "sanction",
+    singbox: {
+      geosite: "geosite-docker",
+      geositeUrl: "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-docker.srs"
+    },
+    clash: {
+      geosite: "docker",
+      format: "yaml",
+      geositeUrl: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/docker.yaml"
+    },
+    xray: { geosite: "geosite:docker" }
+  }
+};
+function getActiveRuleKeys(sysConfig = {}) {
+  const keys = [];
+  const blockThreats = Boolean(sysConfig.blockThreats);
+  if (blockThreats || sysConfig.blockMalware) keys.push("malware");
+  if (blockThreats || sysConfig.blockPhishing) keys.push("phishing");
+  if (blockThreats || sysConfig.blockCryptominers) keys.push("cryptominers");
+  if (blockThreats || sysConfig.blockAds) keys.push("ads");
+  if (sysConfig.blockPorn) keys.push("porn");
+  if (sysConfig.bypassIran) keys.push("iran");
+  if (sysConfig.bypassChina) keys.push("china");
+  if (sysConfig.bypassRussia) keys.push("russia");
+  const bypassAi = Boolean(sysConfig.bypassAi);
+  const bypassDev = Boolean(sysConfig.bypassDev);
+  if (bypassAi || sysConfig.bypassOpenAi) keys.push("openai");
+  if (bypassAi || sysConfig.bypassGoogleAi) keys.push("googleai");
+  if (bypassDev || sysConfig.bypassMicrosoft) keys.push("microsoft");
+  if (bypassDev || sysConfig.bypassDocker) keys.push("docker");
+  return [...new Set(keys)];
+}
+function buildDeterministicPolicyRules(sysConfig = {}, defaultOutbound = "select") {
+  const rules = [];
+  const blockUDP443 = Boolean(sysConfig.blockUDP443);
+  if (blockUDP443) {
+    rules.push({
+      id: "transport-block-quic",
+      category: "transport",
+      action: "reject",
+      network: "udp",
+      port: 443,
+      protocol: "quic",
+      description: "Block QUIC (UDP 443) to force fast HTTP/2 or HTTP/1.1 TLS fallback"
+    });
+  }
+  const activeKeys = getActiveRuleKeys(sysConfig);
+  const threatKeys = activeKeys.filter((k) => RULESET_CATALOG[k]?.category === "threat");
+  const threatDomains = [...sysConfig.blockThreats ? CORE_THREAT_DOMAINS : []];
+  const customBlock = Array.isArray(sysConfig.customBlockRules) ? sysConfig.customBlockRules : [];
+  customBlock.forEach((r) => {
+    if (r && !threatDomains.includes(r)) threatDomains.push(r);
+  });
+  if (threatKeys.length > 0 || threatDomains.length > 0) {
+    rules.push({
+      id: "threat-rejection",
+      category: "threat",
+      action: "reject",
+      dnsServerTag: "reject",
+      ruleKeys: threatKeys,
+      domains: threatDomains,
+      description: "Reject verified security threats, malware, phishing, and ad-trackers"
+    });
+  }
+  rules.push({
+    id: "private-lan-bypass",
+    category: "domestic",
+    action: "direct",
+    dnsServerTag: "dns-direct",
+    ipIsPrivate: true,
+    ips: PRIVATE_IP_CIDRS,
+    description: "Bypass private local area networks and loopback ranges"
+  });
+  const domesticKeys = activeKeys.filter((k) => RULESET_CATALOG[k]?.category === "domestic");
+  const customBypass = Array.isArray(sysConfig.customBypassRules) ? sysConfig.customBypassRules : [];
+  if (domesticKeys.length > 0 || customBypass.length > 0) {
+    rules.push({
+      id: "domestic-bypass",
+      category: "domestic",
+      action: "direct",
+      dnsServerTag: "dns-direct",
+      ruleKeys: domesticKeys,
+      domains: customBypass.filter((r) => !r.includes("/")),
+      ips: customBypass.filter((r) => r.includes("/")),
+      description: "Route domestic regional destinations directly using local DNS resolver"
+    });
+  }
+  const sanctionKeys = activeKeys.filter((k) => RULESET_CATALOG[k]?.category === "sanction");
+  const sanctionDomains = [];
+  if (sysConfig.bypassAi) sanctionDomains.push(...CORE_AI_DOMAINS);
+  if (sysConfig.bypassDev) sanctionDomains.push(...CORE_DEV_DOMAINS);
+  const customSanctions = Array.isArray(sysConfig.customBypassSanctionRules) ? sysConfig.customBypassSanctionRules : [];
+  customSanctions.forEach((r) => {
+    if (r && !sanctionDomains.includes(r)) sanctionDomains.push(r);
+  });
+  if (sanctionKeys.length > 0 || sanctionDomains.length > 0) {
+    rules.push({
+      id: "sanction-unblock",
+      category: "sanction",
+      action: "direct",
+      dnsServerTag: "dns-anti-sanction",
+      ruleKeys: sanctionKeys,
+      domains: [...new Set(sanctionDomains)],
+      description: "Route sanctioned services direct via Anti-Sanction unblocking DNS"
+    });
+  }
+  rules.push({
+    id: "default-proxy-egress",
+    category: "default",
+    action: "proxy",
+    outbound: defaultOutbound,
+    dnsServerTag: "dns-remote",
+    description: "Route all unclassified international traffic through proxy tunnel"
+  });
+  return rules;
+}
+
+// LuciProxy/src/subscriptions/dns.js
+var KNOWN_DOH_BOOTSTRAP = {
+  "dns.google": {
+    ipv4: ["8.8.8.8", "8.8.4.4"],
+    ipv6: ["2001:4860:4860::8888", "2001:4860:4860::8844"]
+  },
+  "cloudflare-dns.com": {
+    ipv4: ["104.16.248.249", "104.16.249.249", "1.1.1.1", "1.0.0.1"],
+    ipv6: ["2606:4700:4700::1111", "2606:4700:4700::1001"]
+  },
+  "dns.quad9.net": {
+    ipv4: ["9.9.9.9", "149.112.112.112"],
+    ipv6: ["2620:fe::fe", "2620:fe::9"]
+  }
+};
+function isCloudflareAnycast(hostOrIp = "") {
+  if (!hostOrIp) return false;
+  const clean = hostOrIp.toLowerCase().trim();
+  if (clean === "cloudflare-dns.com" || clean === "one.one.one.one") return true;
+  if (clean === "1.1.1.1" || clean === "1.0.0.1") return true;
+  if (clean.startsWith("2606:4700:")) return true;
+  if (/^104\.(1[6-9]|2[0-8])\./.test(clean)) return true;
+  if (/^172\.(6[4-7])\./.test(clean)) return true;
+  return false;
+}
+function extractDnsHost(dnsAddress = "") {
+  if (!dnsAddress) return "";
+  try {
+    if (dnsAddress.includes("://")) {
+      const parsed = new URL(dnsAddress);
+      return parsed.hostname;
+    }
+    const bracketMatch = dnsAddress.match(/^\[([^\]]+)\](?::\d+)?$/);
+    if (bracketMatch) {
+      return bracketMatch[1];
+    }
+    if ((dnsAddress.match(/:/g) || []).length > 1) {
+      return dnsAddress;
+    }
+    const clean = dnsAddress.split(":")[0];
+    return clean;
+  } catch {
+    return dnsAddress;
+  }
+}
+function isIpAddress(address = "") {
+  if (!address) return false;
+  const clean = address.replace(/\[|\]/g, "").split("/")[0];
+  const isV4 = /^(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$/.test(clean);
+  const isV6 = clean.includes(":");
+  return isV4 || isV6;
+}
+function buildCanonicalDnsPolicy(sysConfig = {}) {
+  const enableIPv6 = Boolean(sysConfig.enableIPv6);
+  const localDns = sysConfig.localDns || "8.8.8.8";
+  const remoteDns = sysConfig.remoteDns || sysConfig.customDns || "https://8.8.8.8/dns-query";
+  const antiSanctionDns = sysConfig.antiSanctionDns || "178.22.122.100";
+  const fakeDns = Boolean(sysConfig.fakeDns);
+  const remoteHost = extractDnsHost(remoteDns);
+  const isRemoteDomain = !isIpAddress(remoteHost);
+  const isCloudflare = isCloudflareAnycast(remoteHost);
+  const bootstrapHosts = {};
+  if (isRemoteDomain) {
+    const known = KNOWN_DOH_BOOTSTRAP[remoteHost];
+    if (known) {
+      bootstrapHosts[remoteHost] = enableIPv6 ? [...known.ipv4, ...known.ipv6] : [...known.ipv4];
+    }
+  }
+  const antiSanctionHost = extractDnsHost(antiSanctionDns);
+  const isAntiSanctionDomain = !isIpAddress(antiSanctionHost);
+  const isLocalSystem = localDns === "local" || localDns === "localhost" || localDns === "system";
+  return {
+    localDns,
+    isLocalSystem,
+    remoteDns,
+    remoteHost,
+    isRemoteDomain,
+    isCloudflare,
+    antiSanctionDns,
+    antiSanctionHost,
+    isAntiSanctionDomain,
+    fakeDns,
+    enableIPv6,
+    strategy: enableIPv6 ? "prefer_ipv4" : "ipv4_only",
+    queryStrategyXray: enableIPv6 ? "UseIP" : "UseIPv4",
+    fakeIpRangeV4: "198.18.0.0/15",
+    fakeIpRangeV6: enableIPv6 ? "fc00::/18" : null,
+    fakeIpFilter: ["+.lan", "+.local"],
+    bootstrapHosts
+  };
+}
+
+// LuciProxy/src/subscriptions/policy.js
+function resolveNetworkPolicy(sysConfig = {}, defaultOutbound = "select") {
+  const dnsPolicy = buildCanonicalDnsPolicy(sysConfig);
+  const rules = buildDeterministicPolicyRules(sysConfig, defaultOutbound);
+  const activeKeys = getActiveRuleKeys(sysConfig);
+  const ruleSets = activeKeys.map((key) => {
+    const item = RULESET_CATALOG[key];
+    return {
+      key,
+      category: item.category,
+      singbox: item.singbox,
+      clash: item.clash,
+      xray: item.xray
+    };
+  });
+  return {
+    dns: dnsPolicy,
+    rules,
+    ruleSets,
+    transport: {
+      blockUDP: true,
+      // Standard Worker WebSockets cannot proxy UDP datagrams
+      blockUDP443: Boolean(sysConfig.blockUDP443),
+      enableIPv6: dnsPolicy.enableIPv6,
+      strategy: dnsPolicy.strategy,
+      queryStrategyXray: dnsPolicy.queryStrategyXray
+    },
+    outbound: {
+      defaultTag: defaultOutbound,
+      fallbackTag: "direct"
+    }
+  };
+}
+
+// LuciProxy/src/subscriptions/routing.js
+var AI_DOMAINS = [...CORE_AI_DOMAINS];
+var DEV_DOMAINS = [...CORE_DEV_DOMAINS];
+var THREAT_DOMAINS = [...CORE_THREAT_DOMAINS];
+var RULESET_URLS = {
+  malware: RULESET_CATALOG.malware.singbox.geositeUrl,
+  phishing: RULESET_CATALOG.phishing.singbox.geositeUrl,
+  cryptominers: RULESET_CATALOG.cryptominers.singbox.geositeUrl,
+  ads: RULESET_CATALOG.ads.singbox.geositeUrl,
+  iran: RULESET_CATALOG.iran.singbox.geositeUrl,
+  china: RULESET_CATALOG.china.singbox.geositeUrl,
+  russia: RULESET_CATALOG.russia.singbox.geositeUrl,
+  openai: RULESET_CATALOG.openai.singbox.geositeUrl
+};
+function buildSingBoxRules(sysConfig = {}, defaultOutbound = "select") {
   const rules = [
     {
       action: "sniff"
@@ -2766,7 +3494,23 @@ function buildSingBoxRules(sysConfig = {}, defaultOutbound = "proxy") {
     rules.push({
       network: "udp",
       port: 443,
+      action: "reject",
       outbound: "block"
+      // Backward-compatible tag
+    });
+  }
+  if (sysConfig.blockThreats || sysConfig.blockMalware || sysConfig.blockPhishing) {
+    rules.push({
+      domain_suffix: THREAT_DOMAINS,
+      action: "reject",
+      outbound: "block"
+      // Backward-compatible tag
+    });
+  }
+  if (sysConfig.bypassIran) {
+    rules.push({
+      rule_set: ["geosite-ir"],
+      outbound: "direct"
     });
   }
   if (sysConfig.bypassAi) {
@@ -2781,21 +3525,25 @@ function buildSingBoxRules(sysConfig = {}, defaultOutbound = "proxy") {
       outbound: "direct"
     });
   }
-  if (sysConfig.blockThreats) {
-    rules.push({
-      domain_suffix: THREAT_DOMAINS,
-      outbound: "block"
-    });
-  }
   return rules;
 }
 function buildClashRules(sysConfig = {}, defaultGroup = "PROXY") {
-  const rules = [
-    "GEOIP,lan,DIRECT,no-resolve",
-    "GEOIP,IR,DIRECT"
-  ];
+  const rules = [];
   if (sysConfig.blockUDP443) {
     rules.push("AND,((NETWORK,udp),(DST-PORT,443)),REJECT");
+  }
+  if (sysConfig.blockThreats || sysConfig.blockMalware || sysConfig.blockPhishing) {
+    THREAT_DOMAINS.forEach((domain) => {
+      rules.push(`DOMAIN-SUFFIX,${domain},REJECT`);
+    });
+  }
+  rules.push("GEOIP,lan,DIRECT,no-resolve");
+  rules.push("GEOIP,IR,DIRECT");
+  if (sysConfig.bypassChina) {
+    rules.push("GEOIP,CN,DIRECT");
+  }
+  if (sysConfig.bypassRussia) {
+    rules.push("GEOIP,RU,DIRECT");
   }
   if (sysConfig.bypassAi) {
     AI_DOMAINS.forEach((domain) => {
@@ -2807,21 +3555,19 @@ function buildClashRules(sysConfig = {}, defaultGroup = "PROXY") {
       rules.push(`DOMAIN-SUFFIX,${domain},DIRECT`);
     });
   }
-  if (sysConfig.blockThreats) {
-    THREAT_DOMAINS.forEach((domain) => {
-      rules.push(`DOMAIN-SUFFIX,${domain},REJECT`);
-    });
-  }
   rules.push(`MATCH,${defaultGroup}`);
   return rules;
 }
 
-// ../LuciProxy/src/subscriptions/clash.js
+// LuciProxy/src/subscriptions/clash.js
 async function buildYamlProfile(hostName, targetSub = null, allowInsecure = false, sysConfig) {
   const ports = sysConfig.socketPorts ? sysConfig.socketPorts.split(",").map((s) => s.trim()).filter(Boolean) : ["443"];
   const reqPath = encodeURI(`/${sysConfig.apiRoute}`);
+  const policy = resolveNetworkPolicy(sysConfig, "PROXIES");
+  const dnsPolicy = policy.dns;
   const proxies = [];
-  const proxyNames = [];
+  const realProxyNames = [];
+  const fakeProxyNames = [];
   const nameCounts = {};
   const getUniqueName = (baseName) => {
     if (!nameCounts[baseName]) {
@@ -2847,10 +3593,10 @@ async function buildYamlProfile(hostName, targetSub = null, allowInsecure = fals
     server: 127.0.0.1
     port: 80
     password: "${sysConfig.deviceId || "luciproxy"}"
-    udp: true
+    udp: false
     tls: false`
     );
-    proxyNames.push(`"${uName}"`);
+    fakeProxyNames.push(`"${uName}"`);
   });
   const profiles = getAllProfiles(sysConfig, targetSub);
   profiles.forEach((p) => {
@@ -2874,6 +3620,7 @@ async function buildYamlProfile(hostName, targetSub = null, allowInsecure = fals
       effectivePorts.forEach((port) => {
         const sec = getTransportParams(port) === "tls" ? "true" : "false";
         const clashFragYaml = formatClashFragmentYaml(resolvedFm, sec === "true", "    ");
+        const ipVersion = dnsPolicy.enableIPv6 ? "ipv4-prefer" : "ipv4";
         ips.forEach((ip) => {
           const _pips = pips.length > 0 ? pips : [null];
           _pips.forEach((selectedProxyIp) => {
@@ -2888,7 +3635,8 @@ async function buildYamlProfile(hostName, targetSub = null, allowInsecure = fals
     server: ${ip}
     port: ${port}
     uuid: "${p.id}"
-    udp: true
+    ip-version: ${ipVersion}
+    udp: false
     tls: ${sec}
     network: ws
     servername: ${hName}
@@ -2901,7 +3649,7 @@ async function buildYamlProfile(hostName, targetSub = null, allowInsecure = fals
       early-data-header-name: Sec-WebSocket-Protocol
       max-early-data: 2560${clashFragYaml}`
               );
-              proxyNames.push(`"${vName}"`);
+              realProxyNames.push(`"${vName}"`);
               configIndex++;
             }
             if (effectiveMode === "beta" || effectiveMode === "both") {
@@ -2914,7 +3662,8 @@ async function buildYamlProfile(hostName, targetSub = null, allowInsecure = fals
     server: ${ip}
     port: ${port}
     password: "${p.id}"
-    udp: true
+    ip-version: ${ipVersion}
+    udp: false
     tls: ${sec}
     network: ws
     sni: ${hName}
@@ -2927,7 +3676,7 @@ async function buildYamlProfile(hostName, targetSub = null, allowInsecure = fals
       early-data-header-name: Sec-WebSocket-Protocol
       max-early-data: 2560${clashFragYaml}`
               );
-              proxyNames.push(`"${tName}"`);
+              realProxyNames.push(`"${tName}"`);
               configIndex++;
             }
           });
@@ -2935,8 +3684,46 @@ async function buildYamlProfile(hostName, targetSub = null, allowInsecure = fals
       });
     });
   });
-  const proxyList = proxyNames.join(", ");
   const clashRules = buildClashRules(sysConfig, "PROXIES");
+  const localDnsTarget = dnsPolicy.isLocalSystem ? "system" : `${dnsPolicy.localDns}#DIRECT`;
+  const remoteDnsTarget = `${dnsPolicy.remoteDns}#PROXIES`;
+  const nameserverPolicyLines = [];
+  if (sysConfig.bypassAi || sysConfig.bypassOpenAi) {
+    nameserverPolicyLines.push(`    "rule-set:openai": "${dnsPolicy.antiSanctionDns}#DIRECT"`);
+    nameserverPolicyLines.push(`    "+.openai.com": "${dnsPolicy.antiSanctionDns}#DIRECT"`);
+    nameserverPolicyLines.push(`    "+.chatgpt.com": "${dnsPolicy.antiSanctionDns}#DIRECT"`);
+  }
+  if (sysConfig.bypassIran) {
+    nameserverPolicyLines.push(`    "rule-set:ir": "${localDnsTarget}"`);
+    nameserverPolicyLines.push(`    "+.ir": "${localDnsTarget}"`);
+  }
+  const hostLines = [];
+  if (dnsPolicy.bootstrapHosts && Object.keys(dnsPolicy.bootstrapHosts).length > 0) {
+    Object.entries(dnsPolicy.bootstrapHosts).forEach(([domain, ips]) => {
+      hostLines.push(`    "${domain}": [${ips.map((ip) => `"${ip}"`).join(", ")}]`);
+    });
+  }
+  if (sysConfig.blockThreats) {
+    hostLines.push(`    "+.doubleclick.net": "rcode://refused"`);
+    hostLines.push(`    "+.coin-hive.com": "rcode://refused"`);
+  }
+  const clashRuleSets = policy.ruleSets.filter((r) => r.clash && r.clash.geositeUrl);
+  const ruleProviderBlocks = [];
+  clashRuleSets.forEach((r) => {
+    ruleProviderBlocks.push(
+      `  ${r.clash.geosite}:
+    type: http
+    behavior: domain
+    format: ${r.clash.format || "text"}
+    path: ./ruleset/${r.clash.geosite}.${r.clash.format === "yaml" ? "yaml" : "txt"}
+    url: "${r.clash.geositeUrl}"
+    interval: 86400
+    proxy: DIRECT`
+    );
+  });
+  const allProxyNames = [...realProxyNames, ...fakeProxyNames];
+  const allProxyListYaml = allProxyNames.map((n) => `      - ${n}`).join("\n");
+  const realProxyListYaml = realProxyNames.map((n) => `      - ${n}`).join("\n");
   return `# LuciProxy Mihomo / Clash Configuration
 # Generated on: ${(/* @__PURE__ */ new Date()).toISOString()}
 
@@ -2945,17 +3732,52 @@ socks-port: 7891
 allow-lan: true
 mode: rule
 log-level: info
-ipv6: true
+ipv6: ${dnsPolicy.enableIPv6}
 
 dns:
   enable: true
-  listen: 0.0.0.0:53
-  enhanced-mode: fake-ip
+  respect-rules: true
+  use-system-hosts: false
+  listen: 127.0.0.1:1053
+  enhanced-mode: ${dnsPolicy.fakeDns ? "fake-ip" : "redir-host"}${dnsPolicy.fakeDns ? `
   fake-ip-range: 198.18.0.1/16
+  fake-ip-filter:
+    - "+.lan"
+    - "+.local"` : ""}
   nameserver:
-    - 1.1.1.1
-    - 8.8.8.8
-    - https://cloudflare-dns.com/dns-query
+    - ${remoteDnsTarget}
+  proxy-server-nameserver:
+    - ${localDnsTarget}
+  direct-nameserver:
+    - ${localDnsTarget}
+  direct-nameserver-follow-policy: true
+${nameserverPolicyLines.length > 0 ? `  nameserver-policy:
+${nameserverPolicyLines.join("\n")}` : ""}
+${hostLines.length > 0 ? `  hosts:
+${hostLines.join("\n")}` : ""}
+
+sniffer:
+  enable: true
+  force-dns-mapping: true
+  parse-pure-ip: true
+  override-destination: true
+  sniff:
+    HTTP:
+      ports: [80, 8080, 8880, 2052, 2082, 2086, 2095]
+    TLS:
+      ports: [443, 8443, 2053, 2083, 2087, 2096]
+
+${sysConfig.enableTun ? `tun:
+  enable: true
+  stack: mixed
+  auto-route: true
+  strict-route: true
+  auto-detect-interface: true
+  dns-hijack:
+    - "any:53"
+    - "tcp://any:53"
+  mtu: 9000` : `tun:
+  enable: false`}
 
 proxies:
 ${proxies.join("\n")}
@@ -2965,35 +3787,37 @@ proxy-groups:
     type: select
     proxies:
       - "AUTO"
-      - "FALLBACK"
-      ${proxyNames.map((n) => `    - ${n}`).join("\n")}
+      - "FALLBACK"${allProxyListYaml ? "\n" + allProxyListYaml : ""}
 
   - name: "AUTO"
     type: url-test
     url: http://www.gstatic.com/generate_204
     interval: 300
     tolerance: 50
-    proxies:
-      ${proxyNames.map((n) => `    - ${n}`).join("\n")}
+    proxies:${realProxyListYaml ? "\n" + realProxyListYaml : ""}
 
   - name: "FALLBACK"
     type: fallback
     url: http://www.gstatic.com/generate_204
     interval: 300
-    proxies:
-      ${proxyNames.map((n) => `    - ${n}`).join("\n")}
+    proxies:${realProxyListYaml ? "\n" + realProxyListYaml : ""}
 
-rules:
+${ruleProviderBlocks.length > 0 ? `rule-providers:
+${ruleProviderBlocks.join("\n")}
+` : ""}rules:
 ${clashRules.map((r) => `  - ${r}`).join("\n")}
 `;
 }
 
-// ../LuciProxy/src/subscriptions/singbox.js
+// LuciProxy/src/subscriptions/singbox.js
 async function buildSingBoxJsonProfile(hostName, targetSub = null, allowInsecure = false, sysConfig) {
   const ports = sysConfig.socketPorts ? sysConfig.socketPorts.split(",").map((s) => s.trim()).filter(Boolean) : ["443"];
   const reqPath = encodeURI(`/${sysConfig.apiRoute}`);
+  const policy = resolveNetworkPolicy(sysConfig, "select");
+  const dnsPolicy = policy.dns;
   const outboundsArr = [];
-  const dynamicTags = [];
+  const proxyTags = [];
+  const fakeTags = [];
   const nameCounts = {};
   const getUniqueName = (baseName) => {
     if (!nameCounts[baseName]) {
@@ -3017,7 +3841,7 @@ async function buildSingBoxJsonProfile(hostName, targetSub = null, allowInsecure
       type: "direct",
       tag: uName
     });
-    dynamicTags.push(uName);
+    fakeTags.push(uName);
   });
   const profiles = getAllProfiles(sysConfig, targetSub);
   profiles.forEach((p) => {
@@ -3054,7 +3878,8 @@ async function buildSingBoxJsonProfile(hostName, targetSub = null, allowInsecure
                 server: ip,
                 server_port: portNum,
                 uuid: p.id,
-                packet_encoding: "xudp",
+                packet_encoding: "",
+                domain_resolver: "dns-direct",
                 tls: {
                   enabled: isTls,
                   server_name: hName,
@@ -3079,7 +3904,7 @@ async function buildSingBoxJsonProfile(hostName, targetSub = null, allowInsecure
                   max_early_data: 2560
                 }
               });
-              dynamicTags.push(vName);
+              proxyTags.push(vName);
               configIndex++;
             }
             if (effectiveMode === "beta" || effectiveMode === "both") {
@@ -3092,6 +3917,7 @@ async function buildSingBoxJsonProfile(hostName, targetSub = null, allowInsecure
                 server: ip,
                 server_port: portNum,
                 password: p.id,
+                domain_resolver: "dns-direct",
                 tls: {
                   enabled: isTls,
                   server_name: hName,
@@ -3116,7 +3942,7 @@ async function buildSingBoxJsonProfile(hostName, targetSub = null, allowInsecure
                   max_early_data: 2560
                 }
               });
-              dynamicTags.push(tName);
+              proxyTags.push(tName);
               configIndex++;
             }
           });
@@ -3127,27 +3953,97 @@ async function buildSingBoxJsonProfile(hostName, targetSub = null, allowInsecure
   const selectorGroup = {
     type: "selector",
     tag: "select",
-    outbounds: ["auto", ...dynamicTags],
+    outbounds: ["auto", ...proxyTags, ...fakeTags],
     default: "auto"
   };
   const urlTestGroup = {
     type: "urltest",
     tag: "auto",
-    outbounds: [...dynamicTags],
+    outbounds: [...proxyTags],
     url: "http://www.gstatic.com/generate_204",
     interval: "5m",
     tolerance: 50
   };
   const customRules = buildSingBoxRules(sysConfig, "select");
+  const dnsServers = [
+    {
+      tag: "dns-remote",
+      type: dnsPolicy.remoteDns.startsWith("https://") ? "https" : "udp",
+      server: dnsPolicy.remoteHost,
+      detour: "select"
+    },
+    dnsPolicy.isLocalSystem ? { tag: "dns-direct", type: "local" } : { tag: "dns-direct", type: "udp", server: dnsPolicy.localDns }
+  ];
+  if (dnsPolicy.antiSanctionDns) {
+    dnsServers.push({
+      tag: "dns-anti-sanction",
+      type: dnsPolicy.isAntiSanctionDomain ? "https" : "udp",
+      server: dnsPolicy.antiSanctionHost,
+      ...dnsPolicy.isAntiSanctionDomain ? { domain_resolver: "dns-direct" } : {}
+    });
+  }
+  if (dnsPolicy.fakeDns) {
+    dnsServers.push({
+      tag: "dns-fake",
+      type: "fakeip",
+      inet4_range: dnsPolicy.fakeIpRangeV4,
+      ...dnsPolicy.fakeIpRangeV6 ? { inet6_range: dnsPolicy.fakeIpRangeV6 } : {}
+    });
+  }
+  if (dnsPolicy.bootstrapHosts && Object.keys(dnsPolicy.bootstrapHosts).length > 0) {
+    dnsServers.push({
+      tag: "hosts",
+      type: "hosts",
+      predefined: dnsPolicy.bootstrapHosts
+    });
+  }
+  const dnsRules = [
+    { clash_mode: "Direct", server: "dns-direct" },
+    { clash_mode: "Global", server: "dns-remote" }
+  ];
+  if (dnsPolicy.bootstrapHosts && Object.keys(dnsPolicy.bootstrapHosts).length > 0) {
+    dnsRules.unshift({ ip_accept_any: true, server: "hosts" });
+  }
+  const threatRuleSets = policy.ruleSets.filter((r) => r.category === "threat").map((r) => r.singbox.geosite);
+  if (threatRuleSets.length > 0) {
+    dnsRules.push({ action: "reject", rule_set: threatRuleSets });
+  }
+  const domesticRuleSets = policy.ruleSets.filter((r) => r.category === "domestic").map((r) => r.singbox.geosite);
+  if (domesticRuleSets.length > 0) {
+    dnsRules.push({ server: "dns-direct", rule_set: domesticRuleSets });
+  }
+  const sanctionRuleSets = policy.ruleSets.filter((r) => r.category === "sanction").map((r) => r.singbox.geosite);
+  if (sanctionRuleSets.length > 0) {
+    dnsRules.push({ server: "dns-anti-sanction", rule_set: sanctionRuleSets });
+  }
+  if (dnsPolicy.fakeDns) {
+    dnsRules.push({ inbound: "tun-in", query_type: ["A", "AAAA"], server: "dns-fake" });
+  }
+  const ruleSets = policy.ruleSets.filter((r) => r.singbox && r.singbox.geositeUrl).map((r) => ({
+    type: "remote",
+    tag: r.singbox.geosite,
+    format: "binary",
+    url: r.singbox.geositeUrl,
+    download_detour: "direct"
+  }));
   const singboxProfile = {
     dns: {
-      servers: [
-        { tag: "dns-remote", type: "udp", server: "1.1.1.1" },
-        { tag: "dns-direct", type: "local" }
-      ]
+      servers: dnsServers,
+      rules: dnsRules,
+      strategy: dnsPolicy.strategy,
+      independent_cache: true
     },
     inbounds: [
-      { type: "mixed", tag: "mixed-in", listen: "127.0.0.1", listen_port: 2080 }
+      { type: "mixed", tag: "mixed-in", listen: "127.0.0.1", listen_port: 2080 },
+      {
+        type: "tun",
+        tag: "tun-in",
+        address: ["172.19.0.1/28"],
+        mtu: 9e3,
+        auto_route: true,
+        strict_route: true,
+        stack: "mixed"
+      }
     ],
     outbounds: [
       selectorGroup,
@@ -3161,6 +4057,7 @@ async function buildSingBoxJsonProfile(hostName, targetSub = null, allowInsecure
         ...customRules,
         { outbound: "select" }
       ],
+      ...ruleSets.length > 0 ? { rule_set: ruleSets } : {},
       auto_detect_interface: true,
       default_domain_resolver: "dns-direct"
     }
@@ -3187,9 +4084,11 @@ function applySingBoxFragment(configObj) {
   return configObj;
 }
 
-// ../LuciProxy/src/subscriptions/v2ray.js
+// LuciProxy/src/subscriptions/v2ray.js
 async function buildVJsonProfile(hostName, targetSub = null, allowInsecure = false, sysConfig) {
   const ports = sysConfig.socketPorts ? sysConfig.socketPorts.split(",").map((s) => s.trim()).filter(Boolean) : ["443"];
+  const policy = resolveNetworkPolicy(sysConfig, "proxy");
+  const dnsPolicy = policy.dns;
   const outboundsArr = [];
   let configIndex = 0;
   const nameCounts = {};
@@ -3203,6 +4102,10 @@ async function buildVJsonProfile(hostName, targetSub = null, allowInsecure = fal
     return `${baseName}-${c}`;
   };
   const profiles = getAllProfiles(sysConfig, targetSub);
+  const allOutboundDomains = /* @__PURE__ */ new Set();
+  if (hostName && !isIpAddress(hostName)) {
+    allOutboundDomains.add(hostName.trim());
+  }
   profiles.forEach((p) => {
     const resolvedFm = resolveFinalMask(p, sysConfig);
     const pips = getEffectivePips(p, sysConfig);
@@ -3211,6 +4114,9 @@ async function buildVJsonProfile(hostName, targetSub = null, allowInsecure = fal
     const maxCfg = p.maxConfigs || null;
     const profileHostNames = getProfileHostNames(hostName, p);
     profileHostNames.forEach((hName) => {
+      if (hName && !isIpAddress(hName)) {
+        allOutboundDomains.add(hName.trim());
+      }
       const rawEntries = getCleanIpsWithNames(hName, p.cleanIp, sysConfig);
       const hasPrimary = rawEntries.some((e) => e.ip.toLowerCase() === hName.toLowerCase());
       const ipEntries = hasPrimary ? [...rawEntries] : [...rawEntries, { ip: hName, name: "" }];
@@ -3283,32 +4189,121 @@ async function buildVJsonProfile(hostName, targetSub = null, allowInsecure = fal
       });
     });
   });
+  const firstOutboundTag = outboundsArr[0]?.tag || "proxy";
+  const directDnsAddr = dnsPolicy.isLocalSystem ? "8.8.8.8" : dnsPolicy.localDns;
+  const dnsServers = [
+    {
+      address: dnsPolicy.remoteDns,
+      tag: "remote-dns"
+    }
+  ];
+  const outboundDomains = Array.from(allOutboundDomains);
+  if (outboundDomains.length > 0) {
+    dnsServers.push({
+      address: directDnsAddr,
+      domains: outboundDomains.map((d) => `full:${d}`),
+      skipFallback: true
+    });
+  }
+  dnsServers.push({
+    address: directDnsAddr,
+    domains: ["geosite:category-ir", "domain:ir"],
+    skipFallback: true
+  });
+  if (sysConfig.bypassAi || sysConfig.bypassOpenAi) {
+    dnsServers.push({
+      address: dnsPolicy.antiSanctionDns,
+      domains: ["geosite:openai", "domain:openai.com", "domain:chatgpt.com"],
+      skipFallback: true,
+      finalQuery: true
+    });
+  }
+  if (dnsPolicy.fakeDns) {
+    dnsServers.unshift("fakedns");
+  }
+  const dnsHosts = {};
+  if (dnsPolicy.bootstrapHosts && Object.keys(dnsPolicy.bootstrapHosts).length > 0) {
+    Object.entries(dnsPolicy.bootstrapHosts).forEach(([domain, ips]) => {
+      dnsHosts[domain] = ips;
+    });
+  }
+  if (sysConfig.blockThreats) {
+    dnsHosts["geosite:category-ads-all"] = "#3";
+    dnsHosts["domain:doubleclick.net"] = "#3";
+  }
+  const routingRules = [
+    { type: "field", inboundTag: ["dns-in"], outboundTag: "dns-out" },
+    { type: "field", inboundTag: ["remote-dns"], outboundTag: firstOutboundTag },
+    { type: "field", inboundTag: ["dns"], outboundTag: "direct" },
+    { type: "field", outboundTag: "direct", ip: ["geoip:private"] }
+  ];
+  if (sysConfig.blockUDP443) {
+    routingRules.push({
+      type: "field",
+      network: "udp",
+      port: "443",
+      outboundTag: "block"
+    });
+  }
+  if (sysConfig.blockThreats) {
+    routingRules.push({
+      type: "field",
+      domain: ["geosite:category-ads-all", "domain:doubleclick.net"],
+      outboundTag: "block"
+    });
+  }
+  routingRules.push(
+    { type: "field", outboundTag: "direct", ip: ["geoip:private", "geoip:ir"] },
+    { type: "field", outboundTag: "direct", domain: ["geosite:category-ir"] }
+  );
+  if (sysConfig.bypassAi || sysConfig.bypassOpenAi) {
+    routingRules.push({
+      type: "field",
+      outboundTag: "direct",
+      domain: ["geosite:openai", "domain:openai.com", "domain:chatgpt.com"]
+    });
+  }
+  routingRules.push({
+    type: "field",
+    network: "tcp",
+    outboundTag: firstOutboundTag
+  });
   return {
     log: { loglevel: "warning" },
+    dns: {
+      hosts: dnsHosts,
+      servers: dnsServers,
+      queryStrategy: dnsPolicy.queryStrategyXray,
+      tag: "dns"
+    },
     inbounds: [
       {
         port: 10808,
         protocol: "socks",
         settings: { auth: "noauth", udp: true },
-        sniffing: { enabled: true, destOverride: ["http", "tls"] }
+        sniffing: { enabled: true, destOverride: ["http", "tls", ...dnsPolicy.fakeDns ? ["fakedns"] : []] }
+      },
+      {
+        port: 10853,
+        protocol: "dokodemo-door",
+        settings: { address: "1.1.1.1", network: "tcp,udp", port: 53 },
+        tag: "dns-in"
       }
     ],
     outbounds: [
       ...outboundsArr,
-      { protocol: "freedom", tag: "direct", settings: {} },
-      { protocol: "blackhole", tag: "block", settings: {} }
+      { protocol: "dns", tag: "dns-out", settings: { rules: [{ action: "hijack" }] } },
+      { protocol: "freedom", tag: "direct", settings: { domainStrategy: "UseIP" } },
+      { protocol: "blackhole", tag: "block", settings: { response: { type: "http" } } }
     ],
     routing: {
       domainStrategy: "IPIfNonMatch",
-      rules: [
-        { type: "field", outboundTag: "direct", ip: ["geoip:private", "geoip:ir"] },
-        { type: "field", outboundTag: "direct", domain: ["geosite:category-ir"] }
-      ]
+      rules: routingRules
     }
   };
 }
 
-// ../LuciProxy/src/subscriptions/mirror.js
+// LuciProxy/src/subscriptions/mirror.js
 async function syncGitHubMirror(hostName, sysConfig, force = false) {
   const mirror = sysConfig.githubMirror;
   if (!mirror || typeof mirror !== "object") {
@@ -3393,12 +4388,84 @@ async function syncGitHubMirror(hostName, sysConfig, force = false) {
   };
 }
 
-// ../LuciProxy/src/protocols/doh.js
+// LuciProxy/src/protocols/doh.js
 async function handleDoH(request, sysConfig = {}) {
-  const upstreamDoh = sysConfig.customDns || "https://cloudflare-dns.com/dns-query";
+  let upstreamDoh = sysConfig.customDns || sysConfig.remoteDns || "https://dns.google/dns-query";
+  if (upstreamDoh.includes("cloudflare-dns.com")) {
+    upstreamDoh = "https://dns.google/dns-query";
+  }
   try {
     const reqUrl = new URL(request.url);
     const targetUrl = new URL(upstreamDoh);
+    if (targetUrl.hostname === "8.8.8.8") {
+      targetUrl.hostname = "dns.google";
+    }
+    if (request.method === "GET" && reqUrl.searchParams.has("name") && !reqUrl.searchParams.has("dns")) {
+      const name = reqUrl.searchParams.get("name");
+      const typeStr = (reqUrl.searchParams.get("type") || "A").toUpperCase();
+      const qtype = typeStr === "AAAA" ? 28 : 1;
+      if (targetUrl.hostname.includes("google") || targetUrl.hostname === "8.8.8.8") {
+        const resolveUrl = new URL("https://dns.google/resolve");
+        reqUrl.searchParams.forEach((val, key) => resolveUrl.searchParams.set(key, val));
+        const jsonRes = await fetch(resolveUrl.toString(), {
+          method: "GET",
+          headers: { "Accept": "application/dns-json" }
+        });
+        const respHeaders2 = new Headers(jsonRes.headers);
+        respHeaders2.set("Access-Control-Allow-Origin", "*");
+        respHeaders2.set("Cache-Control", "public, max-age=120");
+        return new Response(jsonRes.body, {
+          status: jsonRes.status,
+          headers: respHeaders2
+        });
+      } else {
+        const wireQuery = encodeDnsQuery(name, qtype);
+        const b64 = uint8ArrayToBase64Url(wireQuery);
+        const queryUrl = new URL(upstreamDoh);
+        queryUrl.searchParams.set("dns", b64);
+        const wireRes = await fetch(queryUrl.toString(), {
+          method: "GET",
+          headers: { "Accept": "application/dns-message" }
+        });
+        if (!wireRes.ok) return new Response("DNS-over-HTTPS Upstream Error", { status: 502 });
+        const wireBuf = await wireRes.arrayBuffer();
+        const ips = parseDnsResponse(wireBuf, qtype);
+        const jsonResp = {
+          Status: ips.length > 0 ? 0 : 3,
+          TC: false,
+          RD: true,
+          RA: true,
+          AD: false,
+          CD: false,
+          Question: [{ name, type: qtype }],
+          Answer: ips.map((ip) => ({ name, type: qtype, TTL: 300, data: ip }))
+        };
+        return new Response(JSON.stringify(jsonResp), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/dns-json",
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "public, max-age=120"
+          }
+        });
+      }
+    }
+    if (request.method === "POST" && targetUrl.pathname.endsWith("/dns-query")) {
+      const bodyBytes = await request.arrayBuffer();
+      const b64 = uint8ArrayToBase64Url(bodyBytes);
+      targetUrl.searchParams.set("dns", b64);
+      const res2 = await fetch(targetUrl.toString(), {
+        method: "GET",
+        headers: { "Accept": "application/dns-message" }
+      });
+      const respHeaders2 = new Headers(res2.headers);
+      respHeaders2.set("Access-Control-Allow-Origin", "*");
+      respHeaders2.set("Cache-Control", "public, max-age=120");
+      return new Response(res2.body, {
+        status: res2.status,
+        headers: respHeaders2
+      });
+    }
     reqUrl.searchParams.forEach((value, key) => {
       targetUrl.searchParams.set(key, value);
     });
@@ -3427,7 +4494,7 @@ async function handleDoH(request, sysConfig = {}) {
   }
 }
 
-// ../LuciProxy/src/subscriptions/wireguard.js
+// LuciProxy/src/subscriptions/wireguard.js
 function generateWireguardConfig(sysConfig = {}, isAmnezia = false, title = "LuciProxy-WARP") {
   const privateKey = sysConfig.warpPrivateKey || "4NyxMUme2zGv5r3QWI0hJBlNglm1J/thoCE55PK29G8=";
   const publicKey = sysConfig.warpPublicKey || "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=";
@@ -3478,7 +4545,7 @@ function generateWireguardConfig(sysConfig = {}, isAmnezia = false, title = "Luc
   return configs.join("\n\n---\n\n");
 }
 
-// ../LuciProxy/src/subscriptions/export.js
+// LuciProxy/src/subscriptions/export.js
 function getSharedSettings(sysConfig) {
   const rawCleanIps = sysConfig.cleanIps || sysConfig.proxyIPs || [];
   const proxyIPs = Array.isArray(rawCleanIps) ? rawCleanIps : String(rawCleanIps).split(/[\r\n,]+/).map((s) => s.trim()).filter(Boolean);
@@ -3535,7 +4602,7 @@ function buildSharedSettingsResponse(sysConfig) {
   });
 }
 
-// ../LuciProxy/src/assets/templates.js
+// LuciProxy/src/assets/templates.js
 function decodeBase64Utf8(b64) {
   try {
     if (typeof atob === "function") {
@@ -3573,7 +4640,7 @@ function getSubscriptionHtml() {
   return cachedSubscription;
 }
 
-// ../LuciProxy/src/assets/loaders.js
+// LuciProxy/src/assets/loaders.js
 async function renderDashboardHtml(env, currentVersion, apiRoute = "sync") {
   let html = null;
   const dashboardUrl = env?.DASHBOARD_URL;
@@ -3768,7 +4835,7 @@ working. Further configuration is required.</p>
 </html>`;
 }
 
-// ../LuciProxy/src/index.js
+// LuciProxy/src/index.js
 async function serveMaintenancePage(request, url, sysConfig) {
   if (breakerLevel() >= 1) {
     return new Response("Not Found", { status: 404 });

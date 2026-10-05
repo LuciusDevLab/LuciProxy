@@ -117,7 +117,7 @@ class DeploymentVerifier:
             elapsed = int((time.time() - start) * 1000)
             return CheckResult("D1 Database Health", False, None, f"Query error: {sanitize_text(str(e))}", elapsed)
 
-    def check_admin_auth(self, api_route: str = "sync", master_key: Optional[str] = None, max_retries: int = 4) -> CheckResult:
+    def check_admin_auth(self, api_route: str = "sync", master_key: Optional[str] = None, max_retries: int = 6) -> CheckResult:
         """Tests the admin authentication endpoint with the master key, retrying for edge propagation."""
         if not master_key:
             return CheckResult("Admin Authentication", True, 200, "Skipped (no key provided)", 0)
@@ -136,13 +136,13 @@ class DeploymentVerifier:
                     if data.get("success") is True:
                         return CheckResult("Admin Authentication", True, 200, "Admin authentication verified successfully", elapsed)
                 elif resp.status_code in (404, 500, 502, 503) and attempt < max_retries - 1:
-                    time.sleep(2 * (attempt + 1))
+                    time.sleep(3 * (attempt + 1))
                     continue
                 last_error = f"Authentication rejected: HTTP {resp.status_code}"
             except Exception as e:
                 last_error = f"Auth probe error: {sanitize_text(str(e))}"
                 if attempt < max_retries - 1:
-                    time.sleep(2 * (attempt + 1))
+                    time.sleep(3 * (attempt + 1))
                     continue
 
         elapsed = int((time.time() - start) * 1000)

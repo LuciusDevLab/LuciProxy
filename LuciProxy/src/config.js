@@ -84,8 +84,8 @@ export const SYSTEM_DEFAULTS = {
     mode: "alpha", // "alpha" = vless, "beta" = trojan, "both" = dual protocol
     agent: "chrome",
     socketPorts: "443",
-    customDns: "https://cloudflare-dns.com/dns-query",
-    resolveIp: "1.1.1.1",
+    customDns: "https://8.8.8.8/dns-query",
+    resolveIp: "8.8.8.8",
     cascade: "",
     enableOpt1: false, // ECH
     enableOpt2: false,
@@ -136,6 +136,33 @@ export const SYSTEM_DEFAULTS = {
     bypassAi: false,
     bypassDev: false,
     blockThreats: false,
+    // Canonical Network Policy & Routing Defaults
+    localDns: "8.8.8.8",
+    remoteDns: "https://8.8.8.8/dns-query",
+    antiSanctionDns: "178.22.122.100",
+    fakeDns: false,
+    enableIPv6: false,
+    blockMalware: false,
+    blockPhishing: false,
+    blockCryptominers: false,
+    blockAds: false,
+    blockPorn: false,
+    bypassIran: false,
+    bypassChina: false,
+    bypassRussia: false,
+    bypassOpenAi: false,
+    bypassGoogleAi: false,
+    bypassMicrosoft: false,
+    bypassOracle: false,
+    bypassDocker: false,
+    bypassAdobe: false,
+    bypassEpicGames: false,
+    bypassIntel: false,
+    bypassAmd: false,
+    bypassNvidia: false,
+    customBypassRules: [],
+    customBlockRules: [],
+    customBypassSanctionRules: [],
     warpEndpoints: ["engage.cloudflareclient.com:2408"],
     warpRemoteDNS: "1.1.1.1",
     warpPrivateKey: "",
@@ -144,6 +171,7 @@ export const SYSTEM_DEFAULTS = {
     amneziaNoiseCount: 5,
     amneziaNoiseSizeMin: 50,
     amneziaNoiseSizeMax: 100,
+    enableTun: false,
     prefixes: ["[2a02:898:146:64::]", "[2602:fc59:b0:64::]", "[2602:fc59:11:64::]"],
 };
 
@@ -160,5 +188,6 @@ export const TCP_OPEN_TIMEOUT_MS = 5000;
 export const TCP_WRITE_TIMEOUT_MS = 5000;
 export const TCP_FIRST_READ_TIMEOUT_MS = 7000;
 export const UPSTREAM_WRITE_TIMEOUT_MS = 15000;
+export const DOWNSTREAM_READ_TIMEOUT_MS = 30000;
 export const UPSTREAM_QUEUE_MAX_BYTES = 4 * 1024 * 1024;
 export const UPSTREAM_QUEUE_MAX_ITEMS = 256;

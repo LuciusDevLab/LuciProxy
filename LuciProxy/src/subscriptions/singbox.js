@@ -14,6 +14,7 @@ import {
 } from "../users/manager.js";
 import { getTransportParams } from "../utils/helpers.js";
 import { getConfigName, getFakeConfigNames } from "./tags.js";
+import { resolveNetworkPolicy } from "./policy.js";
 import { buildSingBoxRules } from "./routing.js";
 
 export async function buildSingBoxJsonProfile(hostName, targetSub = null, allowInsecure = false, sysConfig) {
@@ -25,8 +26,12 @@ export async function buildSingBoxJsonProfile(hostName, targetSub = null, allowI
         : ["443"];
     const reqPath = encodeURI(`/${sysConfig.apiRoute}`);
 
+    const policy = resolveNetworkPolicy(sysConfig, "select");
+    const dnsPolicy = policy.dns;
+
     const outboundsArr = [];
-    const dynamicTags = [];
+    const proxyTags = [];
+    const fakeTags = [];
     const nameCounts = {};
 
     const getUniqueName = (baseName) => {
@@ -53,7 +58,7 @@ export async function buildSingBoxJsonProfile(hostName, targetSub = null, allowI
             type: "direct",
             tag: uName,
         });
-        dynamicTags.push(uName);
+        fakeTags.push(uName);
     });
 
     // 2. Iterate profiles
@@ -104,7 +109,8 @@ export async function buildSingBoxJsonProfile(hostName, targetSub = null, allowI
                                 server: ip,
                                 server_port: portNum,
                                 uuid: p.id,
-                                packet_encoding: "xudp",
+                                packet_encoding: "",
+                                domain_resolver: "dns-direct",
                                 tls: {
                                     enabled: isTls,
                                     server_name: hName,
@@ -129,7 +135,7 @@ export async function buildSingBoxJsonProfile(hostName, targetSub = null, allowI
                                     max_early_data: 2560,
                                 },
                             });
-                            dynamicTags.push(vName);
+                            proxyTags.push(vName);
                             configIndex++;
                         }
 
@@ -144,6 +150,7 @@ export async function buildSingBoxJsonProfile(hostName, targetSub = null, allowI
                                 server: ip,
                                 server_port: portNum,
                                 password: p.id,
+                                domain_resolver: "dns-direct",
                                 tls: {
                                     enabled: isTls,
                                     server_name: hName,
@@ -168,7 +175,7 @@ export async function buildSingBoxJsonProfile(hostName, targetSub = null, allowI
                                     max_early_data: 2560,
                                 },
                             });
-                            dynamicTags.push(tName);
+                            proxyTags.push(tName);
                             configIndex++;
                         }
                     });
@@ -180,14 +187,14 @@ export async function buildSingBoxJsonProfile(hostName, targetSub = null, allowI
     const selectorGroup = {
         type: "selector",
         tag: "select",
-        outbounds: ["auto", ...dynamicTags],
+        outbounds: ["auto", ...proxyTags, ...fakeTags],
         default: "auto",
     };
 
     const urlTestGroup = {
         type: "urltest",
         tag: "auto",
-        outbounds: [...dynamicTags],
+        outbounds: [...proxyTags],
         url: "http://www.gstatic.com/generate_204",
         interval: "5m",
         tolerance: 50,
@@ -195,15 +202,103 @@ export async function buildSingBoxJsonProfile(hostName, targetSub = null, allowI
 
     const customRules = buildSingBoxRules(sysConfig, "select");
 
+    // Canonical DNS Server Assembly
+    const dnsServers = [
+        {
+            tag: "dns-remote",
+            type: dnsPolicy.remoteDns.startsWith("https://") ? "https" : "udp",
+            server: dnsPolicy.remoteHost,
+            detour: "select"
+        },
+        dnsPolicy.isLocalSystem
+            ? { tag: "dns-direct", type: "local" }
+            : { tag: "dns-direct", type: "udp", server: dnsPolicy.localDns }
+    ];
+
+    if (dnsPolicy.antiSanctionDns) {
+        dnsServers.push({
+            tag: "dns-anti-sanction",
+            type: dnsPolicy.isAntiSanctionDomain ? "https" : "udp",
+            server: dnsPolicy.antiSanctionHost,
+            ...(dnsPolicy.isAntiSanctionDomain ? { domain_resolver: "dns-direct" } : {})
+        });
+    }
+
+    if (dnsPolicy.fakeDns) {
+        dnsServers.push({
+            tag: "dns-fake",
+            type: "fakeip",
+            inet4_range: dnsPolicy.fakeIpRangeV4,
+            ...(dnsPolicy.fakeIpRangeV6 ? { inet6_range: dnsPolicy.fakeIpRangeV6 } : {})
+        });
+    }
+
+    if (dnsPolicy.bootstrapHosts && Object.keys(dnsPolicy.bootstrapHosts).length > 0) {
+        dnsServers.push({
+            tag: "hosts",
+            type: "hosts",
+            predefined: dnsPolicy.bootstrapHosts
+        });
+    }
+
+    // Canonical DNS Rules Assembly
+    const dnsRules = [
+        { clash_mode: "Direct", server: "dns-direct" },
+        { clash_mode: "Global", server: "dns-remote" }
+    ];
+
+    if (dnsPolicy.bootstrapHosts && Object.keys(dnsPolicy.bootstrapHosts).length > 0) {
+        dnsRules.unshift({ ip_accept_any: true, server: "hosts" });
+    }
+
+    const threatRuleSets = policy.ruleSets.filter((r) => r.category === "threat").map((r) => r.singbox.geosite);
+    if (threatRuleSets.length > 0) {
+        dnsRules.push({ action: "reject", rule_set: threatRuleSets });
+    }
+
+    const domesticRuleSets = policy.ruleSets.filter((r) => r.category === "domestic").map((r) => r.singbox.geosite);
+    if (domesticRuleSets.length > 0) {
+        dnsRules.push({ server: "dns-direct", rule_set: domesticRuleSets });
+    }
+
+    const sanctionRuleSets = policy.ruleSets.filter((r) => r.category === "sanction").map((r) => r.singbox.geosite);
+    if (sanctionRuleSets.length > 0) {
+        dnsRules.push({ server: "dns-anti-sanction", rule_set: sanctionRuleSets });
+    }
+
+    if (dnsPolicy.fakeDns) {
+        dnsRules.push({ inbound: "tun-in", query_type: ["A", "AAAA"], server: "dns-fake" });
+    }
+
+    // Remote Rule-Set Assembly
+    const ruleSets = policy.ruleSets
+        .filter((r) => r.singbox && r.singbox.geositeUrl)
+        .map((r) => ({
+            type: "remote",
+            tag: r.singbox.geosite,
+            format: "binary",
+            url: r.singbox.geositeUrl,
+            download_detour: "direct"
+        }));
+
     const singboxProfile = {
         dns: {
-            servers: [
-                { tag: "dns-remote", type: "udp", server: "1.1.1.1" },
-                { tag: "dns-direct", type: "local" },
-            ],
+            servers: dnsServers,
+            rules: dnsRules,
+            strategy: dnsPolicy.strategy,
+            independent_cache: true
         },
         inbounds: [
             { type: "mixed", tag: "mixed-in", listen: "127.0.0.1", listen_port: 2080 },
+            {
+                type: "tun",
+                tag: "tun-in",
+                address: ["172.19.0.1/28"],
+                mtu: 9000,
+                auto_route: true,
+                strict_route: true,
+                stack: "mixed"
+            }
         ],
         outbounds: [
             selectorGroup,
@@ -217,6 +312,7 @@ export async function buildSingBoxJsonProfile(hostName, targetSub = null, allowI
                 ...customRules,
                 { outbound: "select" },
             ],
+            ...(ruleSets.length > 0 ? { rule_set: ruleSets } : {}),
             auto_detect_interface: true,
             default_domain_resolver: "dns-direct",
         },

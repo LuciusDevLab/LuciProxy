@@ -19,6 +19,7 @@ import {
 import {
     TCP_OPEN_TIMEOUT_MS,
     UPSTREAM_WRITE_TIMEOUT_MS,
+    DOWNSTREAM_READ_TIMEOUT_MS,
     UPSTREAM_QUEUE_MAX_BYTES,
     UPSTREAM_QUEUE_MAX_ITEMS
 } from "../config.js";
@@ -30,6 +31,10 @@ import {
     base64ToArrayBuffer,
     convertToNAT64IPv6
 } from "../utils/helpers.js";
+import {
+    resolveDomainDoh,
+    forwardUdpDnsPacket
+} from "./dns_resolver.js";
 
 // Pluggable socket connection factory (defaults to cloudflare:sockets)
 let customSocketConnector = null;
@@ -157,6 +162,9 @@ export async function startDataPipe(webSocket, env, ctx, relayIndex, sysConfig, 
     webSocket.addEventListener("close", teardown);
     webSocket.addEventListener("error", () => {});
 
+    let isUdpDns = false;
+    let isVlessSession = false;
+
     async function dispatchChunk(chunkBuffer) {
         if (isInitialPacket) {
             isInitialPacket = false;
@@ -167,6 +175,26 @@ export async function startDataPipe(webSocket, env, ctx, relayIndex, sysConfig, 
             }
 
             authenticatedUserKey = session.activeClientHash;
+            isVlessSession = Boolean(session.isVless);
+
+            // Handle VLESS / Trojan UDP DNS (port 53) via in-worker DoH translation
+            if (session.isUdpDns) {
+                isUdpDns = true;
+                if (session.isVless) {
+                    // Send standard VLESS response header [0, 0]
+                    webSocket.send(new Uint8Array([0, 0]));
+                }
+                if (session.firstChunk) {
+                    const dnsAns = await forwardUdpDnsPacket(session.firstChunk, session.isVless, sysConfig);
+                    if (dnsAns) {
+                        webSocket.send(dnsAns);
+                        uploadedBytes += session.firstChunk.byteLength || 0;
+                        downloadedBytes += dnsAns.byteLength || 0;
+                    }
+                }
+                return;
+            }
+
             remoteSocket = session.remoteSocket;
             socketWriter = remoteSocket?.writable?.getWriter();
 
@@ -185,6 +213,13 @@ export async function startDataPipe(webSocket, env, ctx, relayIndex, sysConfig, 
             pumpDownstream(remoteSocket, webSocket, (chunkSize) => {
                 downloadedBytes += chunkSize;
             });
+        } else if (isUdpDns) {
+            const dnsAns = await forwardUdpDnsPacket(chunkBuffer, isVlessSession, sysConfig);
+            if (dnsAns) {
+                webSocket.send(dnsAns);
+                uploadedBytes += chunkBuffer.byteLength || 0;
+                downloadedBytes += dnsAns.byteLength || 0;
+            }
         } else if (socketWriter) {
             await withDeadline(
                 socketWriter.write(chunkBuffer),
@@ -230,19 +265,39 @@ export async function startDataPipe(webSocket, env, ctx, relayIndex, sysConfig, 
 
 /**
  * Pumps downstream packets from remote TCP socket readable stream into client WebSocket.
+ * Enforces an inactivity deadline that resets on each chunk received.
  */
-async function pumpDownstream(remoteSocket, clientWebSocket, onBytesTransferred) {
+export async function pumpDownstream(remoteSocket, clientWebSocket, onBytesTransferred, readTimeoutMs = DOWNSTREAM_READ_TIMEOUT_MS) {
     if (!remoteSocket?.readable) return;
     try {
         const socketReader = remoteSocket.readable.getReader();
         while (true) {
-            const { value, done } = await socketReader.read();
-            if (done) break;
-            if (value) {
-                clientWebSocket.send(value);
-                if (typeof onBytesTransferred === "function") {
-                    onBytesTransferred(value.byteLength || 0);
+            let timer = null;
+            const timeoutPromise = new Promise((_, reject) => {
+                timer = setTimeout(() => {
+                    const err = new Error(`Downstream socket read timed out after ${readTimeoutMs}ms of inactivity`);
+                    err.name = "InactivityTimeoutError";
+                    reject(err);
+                }, readTimeoutMs);
+            });
+
+            try {
+                const { value, done } = await Promise.race([
+                    socketReader.read(),
+                    timeoutPromise
+                ]);
+                if (timer) clearTimeout(timer);
+
+                if (done) break;
+                if (value) {
+                    clientWebSocket.send(value);
+                    if (typeof onBytesTransferred === "function") {
+                        onBytesTransferred(value.byteLength || 0);
+                    }
                 }
+            } catch (err) {
+                if (timer) clearTimeout(timer);
+                throw err;
             }
         }
     } catch {
@@ -255,13 +310,14 @@ async function pumpDownstream(remoteSocket, clientWebSocket, onBytesTransferred)
 /**
  * Parses VLESS or Trojan packet headers, authenticates subscriber, and initiates outbound connection.
  */
-async function parseAndConnect(rawBuffer, relayIndex, sysConfig, env, ctx) {
+export async function parseAndConnect(rawBuffer, relayIndex, sysConfig, env, ctx) {
     const rawView = new Uint8Array(rawBuffer);
     let isVless = false;
     let destinationHost = "";
     let destinationPort = 0;
     let payloadOffset = 0;
     let subscriberToken = "";
+    let isUDP = false;
 
     // 1. Identify protocol: VLESS version byte 0x00 vs Trojan password hash
     if (rawView[0] === 0x00) {
@@ -272,6 +328,7 @@ async function parseAndConnect(rawBuffer, relayIndex, sysConfig, env, ctx) {
         destinationPort = vlessHeader.targetPort;
         payloadOffset = vlessHeader.offset;
         subscriberToken = vlessHeader.clientUuidHex;
+        isUDP = Boolean(vlessHeader.isUDP);
     } else {
         const trojanHeader = parseTrojanHeader(rawBuffer);
         if (trojanHeader.hasError) return { hasError: true };
@@ -279,6 +336,7 @@ async function parseAndConnect(rawBuffer, relayIndex, sysConfig, env, ctx) {
         destinationPort = trojanHeader.targetPort;
         payloadOffset = trojanHeader.offset;
         subscriberToken = trojanHeader.clientHashHex;
+        isUDP = Boolean(trojanHeader.isUDP);
     }
 
     // 2. Authenticate subscriber profile
@@ -323,7 +381,28 @@ async function parseAndConnect(rawBuffer, relayIndex, sysConfig, env, ctx) {
     trackingMetrics.last = Date.now();
     uuidUsage.set(clientKey, trackingMetrics);
 
-    // 4. Resolve outbound socket connection provider
+    // 4. Handle UDP command explicitly (DNS on port 53 vs rejection)
+    if (isUDP) {
+        if (destinationPort === 53) {
+            const firstChunk = payloadOffset < rawBuffer.byteLength ? rawBuffer.slice(payloadOffset) : null;
+            return {
+                hasError: false,
+                isVless,
+                isUdpDns: true,
+                activeClientHash: clientKey,
+                firstChunk,
+            };
+        } else {
+            // Reject arbitrary UDP commands cleanly
+            return {
+                hasError: true,
+                isUdpRejected: true,
+                message: "UDP proxying only supported for DNS (port 53)"
+            };
+        }
+    }
+
+    // 5. Resolve outbound socket connection provider
     const connectProvider = await resolveConnectFunction();
     if (!connectProvider) {
         return { hasError: true, message: "Edge sockets capability unavailable" };
@@ -335,20 +414,14 @@ async function parseAndConnect(rawBuffer, relayIndex, sysConfig, env, ctx) {
     // Apply DNS-over-HTTPS resolution if customDns is active
     if (sysConfig.customDns && /^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/.test(destinationHost)) {
         try {
-            const dnsEndpoint = new URL(sysConfig.customDns);
-            dnsEndpoint.searchParams.set("name", destinationHost);
-            dnsEndpoint.searchParams.set("type", "A");
-            const dnsResponse = await fetch(dnsEndpoint.toString(), {
-                headers: { accept: "application/dns-json" },
-            });
-            const dnsData = await dnsResponse.json();
-            if (dnsData.Answer && dnsData.Answer.length > 0) {
-                resolvedDestination = dnsData.Answer[0].data;
+            const resolvedIp = await resolveDomainDoh(destinationHost, sysConfig.customDns, "A");
+            if (resolvedIp) {
+                resolvedDestination = resolvedIp;
             }
         } catch {}
     }
 
-    // 5. Outbound Connection: Direct Connect Attempt
+    // 6. Outbound Connection: Direct Connect Attempt
     try {
         remoteSocket = connectProvider({
             hostname: formatSocketHost(resolvedDestination),

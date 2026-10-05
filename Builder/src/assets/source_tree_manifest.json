@@ -1,9 +1,9 @@
 {
   "luciproxy_version": "1.1.0",
-  "snapshot_timestamp": "2026-10-04T18:10:39Z",
-  "total_files": 43,
-  "total_bytes": 1090444,
-  "tree_sha256": "1bf4b0329e1ebd4755193dfecb24eedfa7b395a2fb1d7708ba08e3333b9e1de8",
+  "snapshot_timestamp": "2026-10-05T12:48:06Z",
+  "total_files": 50,
+  "total_bytes": 1244099,
+  "tree_sha256": "16d95c6305183982695bb1401885039e3fe580c8cd9109482558b0d4f1caea86",
   "exclusions": [
     ".wrangler",
     ".wrangler/*",
@@ -33,8 +33,8 @@
     },
     {
       "path": "dist/index.js",
-      "sha256": "7d96a3fef0f02f72d23744e2874c92508e7c0ca1f4cada4005e6b3bf7d3cc240",
-      "size_bytes": 247349
+      "sha256": "b53789e44aa4e6b2f2a52d82a3b709db6d15a7dee105e288ef6ec7da6efb91a0",
+      "size_bytes": 286522
     },
     {
       "path": "dist/index.js.map",
@@ -88,8 +88,8 @@
     },
     {
       "path": "src/config.js",
-      "sha256": "80957b5878ca1592cda1529942e58a847b73d2819dd87beaa604c73d01f5e8c5",
-      "size_bytes": 5236
+      "sha256": "dddd497cdc9277897652cd26305c5614699d2e2967c6f177f9a752748b6d81c2",
+      "size_bytes": 6035
     },
     {
       "path": "src/db/d1.js",
@@ -102,14 +102,19 @@
       "size_bytes": 22908
     },
     {
+      "path": "src/protocols/dns_resolver.js",
+      "sha256": "4eca0c574cb08fadc9ddcb21980b443470cd62c1f57829171fd4ee76c3e356dc",
+      "size_bytes": 10995
+    },
+    {
       "path": "src/protocols/doh.js",
-      "sha256": "b1fde0862efa2f5f40c684acf6a16266d4401f2d2152fe7dd5b2579a03a5d513",
-      "size_bytes": 1559
+      "sha256": "23f4e54e72f9bcebcf5fe2570ff51fae8a28e6a7f6032372118c622f9d55d20c",
+      "size_bytes": 5521
     },
     {
       "path": "src/protocols/proxy.js",
-      "sha256": "3f8a008d4bac62b84db72a5a2337d9427990fd13af9e765b67424a9dea8af437",
-      "size_bytes": 25266
+      "sha256": "3c3cf737828456e0b15105c60b46574f0faca92e6f9e77a1134668744062f8f0",
+      "size_bytes": 27926
     },
     {
       "path": "src/protocols/trojan.js",
@@ -123,8 +128,13 @@
     },
     {
       "path": "src/subscriptions/clash.js",
-      "sha256": "e74018261ad90751967a58533a0bf4f13a6eead2fc939cf09cc71ae69157747c",
-      "size_bytes": 6735
+      "sha256": "80dae71b5b260e43f63bac9ea543f14000e8ef76549b480502d4532b548c6db8",
+      "size_bytes": 10066
+    },
+    {
+      "path": "src/subscriptions/dns.js",
+      "sha256": "3246d0ff1d349603603429d2b64243fa378e1c7c3e49961b4f83074e95dd21b2",
+      "size_bytes": 4753
     },
     {
       "path": "src/subscriptions/export.js",
@@ -147,14 +157,24 @@
       "size_bytes": 3960
     },
     {
+      "path": "src/subscriptions/policy.js",
+      "sha256": "085de29e69256fc8b57a916d89160e5cc3c8fb62207d113d672006377388b4f1",
+      "size_bytes": 1647
+    },
+    {
       "path": "src/subscriptions/routing.js",
-      "sha256": "8ab00ad731805f45d5bd8bc0eec0b854c235694547107051525466b3db5a6af7",
-      "size_bytes": 4084
+      "sha256": "c9758e7c75412fc8db3574448b25563a793ab698b5110dc0c4217d7dd61f6675",
+      "size_bytes": 4514
+    },
+    {
+      "path": "src/subscriptions/rules.js",
+      "sha256": "b9c0e11b360969c5f2021f3867f680de5a5974f62cb578ce3fd3449f3cab5edd",
+      "size_bytes": 14431
     },
     {
       "path": "src/subscriptions/singbox.js",
-      "sha256": "e0a3ef72bb2cff3df4eb2e78b6ee136e2e70a2ea0e6eca4a14c4c19df8d20612",
-      "size_bytes": 9712
+      "sha256": "4c81199fff776fab148161dd4ff58ad29c48628429ddd8848c3b5a02c68a9af8",
+      "size_bytes": 13096
     },
     {
       "path": "src/subscriptions/tags.js",
@@ -168,8 +188,8 @@
     },
     {
       "path": "src/subscriptions/v2ray.js",
-      "sha256": "a077ee0f99240a9653d6c5a4cdac040f75db01d81a73f30603f6084a521bb9b6",
-      "size_bytes": 7077
+      "sha256": "b49e00f2df6e32ffddeff60d248691daa99eca5ea8e0b1a37405f786a7e9c1d1",
+      "size_bytes": 10951
     },
     {
       "path": "src/subscriptions/wireguard.js",
@@ -190,6 +210,16 @@
       "path": "src/utils/helpers.js",
       "sha256": "c6383f4ac2bc7d8ee7ffd59261a609017b5d6f2a0641fe961cd4998c24bb5862",
       "size_bytes": 6387
+    },
+    {
+      "path": "tests/ab_synthesizer.mjs",
+      "sha256": "c8f3bed4adbc7799afb65a2b1da4d215bf545dc358ce9177fa790bccbd29f760",
+      "size_bytes": 14029
+    },
+    {
+      "path": "tests/canonical_policy.test.js",
+      "sha256": "09963c99e9f89cf16014b48a177cfa3dc5f9346e7824c6771f7f06c88bb2b0a6",
+      "size_bytes": 27106
     },
     {
       "path": "tests/crypto.test.js",
@@ -217,14 +247,19 @@
       "size_bytes": 19544
     },
     {
+      "path": "tests/phase5b_defects.test.js",
+      "sha256": "53f28b06046a661bcf9aa3cd63b0f751688cc482e00aa23b2a16cd5ad3fe3042",
+      "size_bytes": 23058
+    },
+    {
       "path": "tests/protocols.test.js",
       "sha256": "ae6565ed22aa3d5b59c57fab88ac4f54f0961975823da243523061dce385382a",
       "size_bytes": 23706
     },
     {
       "path": "tests/subscriptions.test.js",
-      "sha256": "0540bc635669c33071efe2791bcc78a5d0c9dd0dc34d47fb20146a84cbf0355a",
-      "size_bytes": 10327
+      "sha256": "7f7024885f12240e4ffd9de84d6058d489a3beb523afe0598ddea0a20330f25a",
+      "size_bytes": 10350
     },
     {
       "path": "tests/users_and_db.test.js",

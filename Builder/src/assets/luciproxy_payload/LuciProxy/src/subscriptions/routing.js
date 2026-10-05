@@ -1,60 +1,43 @@
 /**
- * LuciProxy - Curated Routing, Anti-DPI & Rule-Set Engine
- * Rule sets for domain bypass, threat mitigation, and protocol filtering.
+ * LuciProxy - Public Routing Coordinator & Canonical Facade
+ *
+ * Exposes canonical policy resolution and compiles deterministic routing rules
+ * for Sing-box, Clash / Mihomo, and Xray / V2Ray engines.
  *
  * Independent implementation authored specifically for LuciProxy.
  */
 
-export const AI_DOMAINS = [
-    "openai.com",
-    "chatgpt.com",
-    "ai.com",
-    "oaistatic.com",
-    "oaiusercontent.com",
-    "anthropic.com",
-    "claude.ai",
-    "deepmind.google",
-    "gemini.google.com"
-];
+import {
+    CORE_AI_DOMAINS,
+    CORE_DEV_DOMAINS,
+    CORE_THREAT_DOMAINS,
+    PRIVATE_IP_CIDRS,
+    RULESET_CATALOG
+} from "./rules.js";
+import { resolveNetworkPolicy } from "./policy.js";
 
-export const DEV_DOMAINS = [
-    "github.com",
-    "githubusercontent.com",
-    "gitlab.com",
-    "docker.com",
-    "oracle.com",
-    "intel.com",
-    "amd.com",
-    "nvidia.com",
-    "microsoft.com",
-    "adobe.com",
-    "epicgames.com"
-];
-
-export const THREAT_DOMAINS = [
-    "doubleclick.net",
-    "adservice.google.com",
-    "pagead2.googlesyndication.com",
-    "coin-hive.com",
-    "coinhive.com",
-    "crypto-loot.com"
-];
+// Re-export constants for backward compatibility
+export const AI_DOMAINS = [...CORE_AI_DOMAINS];
+export const DEV_DOMAINS = [...CORE_DEV_DOMAINS];
+export const THREAT_DOMAINS = [...CORE_THREAT_DOMAINS];
 
 export const RULESET_URLS = {
-    malware: "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-malware.srs",
-    phishing: "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-phishing.srs",
-    cryptominers: "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-cryptominers.srs",
-    ads: "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-category-ads-all.srs",
-    iran: "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-ir.srs",
-    china: "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-cn.srs",
-    russia: "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-category-ru.srs",
-    openai: "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-openai.srs"
+    malware: RULESET_CATALOG.malware.singbox.geositeUrl,
+    phishing: RULESET_CATALOG.phishing.singbox.geositeUrl,
+    cryptominers: RULESET_CATALOG.cryptominers.singbox.geositeUrl,
+    ads: RULESET_CATALOG.ads.singbox.geositeUrl,
+    iran: RULESET_CATALOG.iran.singbox.geositeUrl,
+    china: RULESET_CATALOG.china.singbox.geositeUrl,
+    russia: RULESET_CATALOG.russia.singbox.geositeUrl,
+    openai: RULESET_CATALOG.openai.singbox.geositeUrl
 };
 
 /**
- * Builds routing rules for Sing-Box 1.14+ JSON configuration.
+ * Builds routing rules for Sing-Box 1.10+ / 1.14+ JSON configuration.
+ * Adheres strictly to deterministic precedence:
+ *   Sniff/Hijack -> Transport (QUIC/UDP) -> Threats -> Bypasses -> Selector
  */
-export function buildSingBoxRules(sysConfig = {}, defaultOutbound = "proxy") {
+export function buildSingBoxRules(sysConfig = {}, defaultOutbound = "select") {
     const rules = [
         {
             action: "sniff"
@@ -77,16 +60,34 @@ export function buildSingBoxRules(sysConfig = {}, defaultOutbound = "proxy") {
         }
     ];
 
-    // Anti-DPI: Block UDP/443 (QUIC) to prevent ISP UDP rate limiting/throttling
+    // 1. Anti-DPI Transport: Block UDP/443 (QUIC) to prevent ISP rate limiting
     if (sysConfig.blockUDP443) {
         rules.push({
             network: "udp",
             port: 443,
-            outbound: "block"
+            action: "reject",
+            outbound: "block" // Backward-compatible tag
         });
     }
 
-    // Bypass AI services
+    // 2. Security Threat Rejection (Precedes destination bypasses)
+    if (sysConfig.blockThreats || sysConfig.blockMalware || sysConfig.blockPhishing) {
+        rules.push({
+            domain_suffix: THREAT_DOMAINS,
+            action: "reject",
+            outbound: "block" // Backward-compatible tag
+        });
+    }
+
+    // 3. Domestic Bypasses (Iran, etc.)
+    if (sysConfig.bypassIran) {
+        rules.push({
+            rule_set: ["geosite-ir"],
+            outbound: "direct"
+        });
+    }
+
+    // 4. Sanction Service Steering
     if (sysConfig.bypassAi) {
         rules.push({
             domain_suffix: AI_DOMAINS,
@@ -94,19 +95,10 @@ export function buildSingBoxRules(sysConfig = {}, defaultOutbound = "proxy") {
         });
     }
 
-    // Bypass Developer services
     if (sysConfig.bypassDev) {
         rules.push({
             domain_suffix: DEV_DOMAINS,
             outbound: "direct"
-        });
-    }
-
-    // Block Threats & Ads
-    if (sysConfig.blockThreats) {
-        rules.push({
-            domain_suffix: THREAT_DOMAINS,
-            outbound: "block"
         });
     }
 
@@ -115,39 +107,52 @@ export function buildSingBoxRules(sysConfig = {}, defaultOutbound = "proxy") {
 
 /**
  * Builds routing rules for Clash / Clash.Meta / Mihomo YAML configuration.
+ * Adheres strictly to deterministic precedence:
+ *   Transport (QUIC/UDP) -> Threats -> LAN -> Domestic -> Sanctions -> MATCH
  */
 export function buildClashRules(sysConfig = {}, defaultGroup = "PROXY") {
-    const rules = [
-        "GEOIP,lan,DIRECT,no-resolve",
-        "GEOIP,IR,DIRECT"
-    ];
+    const rules = [];
 
-    // Anti-DPI: Block UDP/443
+    // 1. Anti-DPI Transport: Block UDP/443 (QUIC)
     if (sysConfig.blockUDP443) {
         rules.push("AND,((NETWORK,udp),(DST-PORT,443)),REJECT");
     }
 
-    // Bypass AI
+    // 2. Threat Rejection (Precedes destination bypasses)
+    if (sysConfig.blockThreats || sysConfig.blockMalware || sysConfig.blockPhishing) {
+        THREAT_DOMAINS.forEach((domain) => {
+            rules.push(`DOMAIN-SUFFIX,${domain},REJECT`);
+        });
+    }
+
+    // 3. Private / LAN Networks
+    rules.push("GEOIP,lan,DIRECT,no-resolve");
+
+    // 4. Domestic / Direct Bypasses (Iran, etc.)
+    rules.push("GEOIP,IR,DIRECT");
+    if (sysConfig.bypassChina) {
+        rules.push("GEOIP,CN,DIRECT");
+    }
+    if (sysConfig.bypassRussia) {
+        rules.push("GEOIP,RU,DIRECT");
+    }
+
+    // 5. Sanction Service Steering
     if (sysConfig.bypassAi) {
         AI_DOMAINS.forEach((domain) => {
             rules.push(`DOMAIN-SUFFIX,${domain},DIRECT`);
         });
     }
 
-    // Bypass Dev
     if (sysConfig.bypassDev) {
         DEV_DOMAINS.forEach((domain) => {
             rules.push(`DOMAIN-SUFFIX,${domain},DIRECT`);
         });
     }
 
-    // Block Threats
-    if (sysConfig.blockThreats) {
-        THREAT_DOMAINS.forEach((domain) => {
-            rules.push(`DOMAIN-SUFFIX,${domain},REJECT`);
-        });
-    }
-
+    // 6. Default Egress
     rules.push(`MATCH,${defaultGroup}`);
     return rules;
 }
+
+export { resolveNetworkPolicy };

@@ -16,6 +16,8 @@ import { getTransportParams } from "../utils/helpers.js";
 import { getConfigName } from "./tags.js";
 import { generateConfigUuid, safeBtoa } from "../utils/crypto.js";
 import { resolveFinalMask, formatXrayFinalMask } from "./finalmask.js";
+import { isIpAddress } from "./dns.js";
+import { resolveNetworkPolicy } from "./policy.js";
 
 export async function buildVJsonProfile(hostName, targetSub = null, allowInsecure = false, sysConfig) {
     const ports = sysConfig.socketPorts
@@ -24,6 +26,9 @@ export async function buildVJsonProfile(hostName, targetSub = null, allowInsecur
               .map((s) => s.trim())
               .filter(Boolean)
         : ["443"];
+
+    const policy = resolveNetworkPolicy(sysConfig, "proxy");
+    const dnsPolicy = policy.dns;
 
     const outboundsArr = [];
     let configIndex = 0;
@@ -40,6 +45,11 @@ export async function buildVJsonProfile(hostName, targetSub = null, allowInsecur
     };
 
     const profiles = getAllProfiles(sysConfig, targetSub);
+    const allOutboundDomains = new Set();
+    if (hostName && !isIpAddress(hostName)) {
+        allOutboundDomains.add(hostName.trim());
+    }
+
     profiles.forEach((p) => {
         const resolvedFm = resolveFinalMask(p, sysConfig);
         const pips = getEffectivePips(p, sysConfig);
@@ -54,6 +64,9 @@ export async function buildVJsonProfile(hostName, targetSub = null, allowInsecur
         const profileHostNames = getProfileHostNames(hostName, p);
 
         profileHostNames.forEach((hName) => {
+            if (hName && !isIpAddress(hName)) {
+                allOutboundDomains.add(hName.trim());
+            }
             const rawEntries = getCleanIpsWithNames(hName, p.cleanIp, sysConfig);
             const hasPrimary = rawEntries.some((e) => e.ip.toLowerCase() === hName.toLowerCase());
             const ipEntries = hasPrimary ? [...rawEntries] : [...rawEntries, { ip: hName, name: "" }];
@@ -140,27 +153,136 @@ export async function buildVJsonProfile(hostName, targetSub = null, allowInsecur
         });
     });
 
+    const firstOutboundTag = outboundsArr[0]?.tag || "proxy";
+
+    // Canonical DNS block for Xray
+    const directDnsAddr = dnsPolicy.isLocalSystem ? "8.8.8.8" : dnsPolicy.localDns;
+    const dnsServers = [
+        {
+            address: dnsPolicy.remoteDns,
+            tag: "remote-dns"
+        }
+    ];
+
+    // Explicit Bootstrap for Proxy Endpoints (evades loop and resolves worker domain directly)
+    const outboundDomains = Array.from(allOutboundDomains);
+    if (outboundDomains.length > 0) {
+        dnsServers.push({
+            address: directDnsAddr,
+            domains: outboundDomains.map((d) => `full:${d}`),
+            skipFallback: true
+        });
+    }
+
+    // Domestic bypass
+    dnsServers.push({
+        address: directDnsAddr,
+        domains: ["geosite:category-ir", "domain:ir"],
+        skipFallback: true
+    });
+
+    if (sysConfig.bypassAi || sysConfig.bypassOpenAi) {
+        dnsServers.push({
+            address: dnsPolicy.antiSanctionDns,
+            domains: ["geosite:openai", "domain:openai.com", "domain:chatgpt.com"],
+            skipFallback: true,
+            finalQuery: true
+        });
+    }
+
+    if (dnsPolicy.fakeDns) {
+        dnsServers.unshift("fakedns");
+    }
+
+    const dnsHosts = {};
+    if (dnsPolicy.bootstrapHosts && Object.keys(dnsPolicy.bootstrapHosts).length > 0) {
+        Object.entries(dnsPolicy.bootstrapHosts).forEach(([domain, ips]) => {
+            dnsHosts[domain] = ips;
+        });
+    }
+    if (sysConfig.blockThreats) {
+        dnsHosts["geosite:category-ads-all"] = "#3";
+        dnsHosts["domain:doubleclick.net"] = "#3";
+    }
+
+    // Routing rules with deterministic precedence
+    const routingRules = [
+        { type: "field", inboundTag: ["dns-in"], outboundTag: "dns-out" },
+        { type: "field", inboundTag: ["remote-dns"], outboundTag: firstOutboundTag },
+        { type: "field", inboundTag: ["dns"], outboundTag: "direct" },
+        { type: "field", outboundTag: "direct", ip: ["geoip:private"] }
+    ];
+
+    if (sysConfig.blockUDP443) {
+        routingRules.push({
+            type: "field",
+            network: "udp",
+            port: "443",
+            outboundTag: "block"
+        });
+    }
+
+    if (sysConfig.blockThreats) {
+        routingRules.push({
+            type: "field",
+            domain: ["geosite:category-ads-all", "domain:doubleclick.net"],
+            outboundTag: "block"
+        });
+    }
+
+    // Domestic bypass
+    routingRules.push(
+        { type: "field", outboundTag: "direct", ip: ["geoip:private", "geoip:ir"] },
+        { type: "field", outboundTag: "direct", domain: ["geosite:category-ir"] }
+    );
+
+    // Sanction bypass
+    if (sysConfig.bypassAi || sysConfig.bypassOpenAi) {
+        routingRules.push({
+            type: "field",
+            outboundTag: "direct",
+            domain: ["geosite:openai", "domain:openai.com", "domain:chatgpt.com"]
+        });
+    }
+
+    // Remaining traffic to proxy
+    routingRules.push({
+        type: "field",
+        network: "tcp",
+        outboundTag: firstOutboundTag
+    });
+
     return {
         log: { loglevel: "warning" },
+        dns: {
+            hosts: dnsHosts,
+            servers: dnsServers,
+            queryStrategy: dnsPolicy.queryStrategyXray,
+            tag: "dns"
+        },
         inbounds: [
             {
                 port: 10808,
                 protocol: "socks",
                 settings: { auth: "noauth", udp: true },
-                sniffing: { enabled: true, destOverride: ["http", "tls"] },
+                sniffing: { enabled: true, destOverride: ["http", "tls", ...(dnsPolicy.fakeDns ? ["fakedns"] : [])] },
             },
+            {
+                port: 10853,
+                protocol: "dokodemo-door",
+                settings: { address: "1.1.1.1", network: "tcp,udp", port: 53 },
+                tag: "dns-in"
+            }
         ],
         outbounds: [
             ...outboundsArr,
-            { protocol: "freedom", tag: "direct", settings: {} },
-            { protocol: "blackhole", tag: "block", settings: {} },
+            { protocol: "dns", tag: "dns-out", settings: { rules: [{ action: "hijack" }] } },
+            { protocol: "freedom", tag: "direct", settings: { domainStrategy: "UseIP" } },
+            { protocol: "blackhole", tag: "block", settings: { response: { type: "http" } } },
         ],
         routing: {
             domainStrategy: "IPIfNonMatch",
-            rules: [
-                { type: "field", outboundTag: "direct", ip: ["geoip:private", "geoip:ir"] },
-                { type: "field", outboundTag: "direct", domain: ["geosite:category-ir"] },
-            ],
+            rules: routingRules,
         },
     };
 }

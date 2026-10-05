@@ -142,8 +142,8 @@ test("Sing-Box Builder - produces valid 1.9+ JSON structure", async () => {
         "hijack-dns action is used for DNS interception"
     );
     assert(
-        sb.dns.servers.some((s) => s.tag === "dns-direct" && s.type === "local"),
-        "Modern local DNS server present"
+        sb.dns.servers.some((s) => s.tag === "dns-direct" && (s.type === "udp" || s.type === "local")),
+        "Modern direct DNS server present"
     );
 });
 
