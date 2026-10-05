@@ -19,7 +19,8 @@ export const PRIVATE_IP_CIDRS = [
     "100.64.0.0/10",
     "169.254.0.0/16",
     "fc00::/7",
-    "fe80::/10"
+    "fe80::/10",
+    "::1/128"
 ];
 
 export const CORE_THREAT_DOMAINS = [

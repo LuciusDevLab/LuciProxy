@@ -18,6 +18,12 @@ import { generateConfigUuid, safeBtoa } from "../utils/crypto.js";
 import { resolveFinalMask, formatXrayFinalMask } from "./finalmask.js";
 import { isIpAddress } from "./dns.js";
 import { resolveNetworkPolicy } from "./policy.js";
+import {
+    PRIVATE_IP_CIDRS,
+    CORE_THREAT_DOMAINS,
+    CORE_AI_DOMAINS,
+    CORE_DEV_DOMAINS
+} from "./rules.js";
 
 export async function buildVJsonProfile(hostName, targetSub = null, allowInsecure = false, sysConfig) {
     const ports = sysConfig.socketPorts
@@ -179,17 +185,35 @@ export async function buildVJsonProfile(hostName, targetSub = null, allowInsecur
         });
     }
 
-    // Domestic bypass
+    // Domestic bypass (Iran, custom ranges)
+    const domesticDomains = ["domain:ir"];
+    if (Array.isArray(sysConfig.customBypassRules)) {
+        sysConfig.customBypassRules.filter((r) => !r.includes("/")).forEach((d) => {
+            domesticDomains.push(`domain:${d}`);
+        });
+    }
     dnsServers.push({
         address: directDnsAddr,
-        domains: ["geosite:category-ir", "domain:ir"],
+        domains: [...new Set(domesticDomains)],
         skipFallback: true
     });
 
+    const sanctionDomains = [];
     if (sysConfig.bypassAi || sysConfig.bypassOpenAi) {
+        CORE_AI_DOMAINS.forEach((d) => sanctionDomains.push(`domain:${d}`));
+    }
+    if (sysConfig.bypassDev) {
+        CORE_DEV_DOMAINS.forEach((d) => sanctionDomains.push(`domain:${d}`));
+    }
+    if (Array.isArray(sysConfig.customBypassSanctionRules)) {
+        sysConfig.customBypassSanctionRules.forEach((d) => {
+            if (d) sanctionDomains.push(`domain:${d}`);
+        });
+    }
+    if (sanctionDomains.length > 0) {
         dnsServers.push({
             address: dnsPolicy.antiSanctionDns,
-            domains: ["geosite:openai", "domain:openai.com", "domain:chatgpt.com"],
+            domains: [...new Set(sanctionDomains)],
             skipFallback: true,
             finalQuery: true
         });
@@ -205,9 +229,15 @@ export async function buildVJsonProfile(hostName, targetSub = null, allowInsecur
             dnsHosts[domain] = ips;
         });
     }
-    if (sysConfig.blockThreats) {
-        dnsHosts["geosite:category-ads-all"] = "#3";
-        dnsHosts["domain:doubleclick.net"] = "#3";
+    if (sysConfig.blockThreats || sysConfig.blockMalware || sysConfig.blockPhishing) {
+        CORE_THREAT_DOMAINS.forEach((domain) => {
+            dnsHosts[`domain:${domain}`] = "#3";
+        });
+        if (Array.isArray(sysConfig.customBlockRules)) {
+            sysConfig.customBlockRules.forEach((d) => {
+                if (d) dnsHosts[`domain:${d}`] = "#3";
+            });
+        }
     }
 
     // Routing rules with deterministic precedence
@@ -215,7 +245,7 @@ export async function buildVJsonProfile(hostName, targetSub = null, allowInsecur
         { type: "field", inboundTag: ["dns-in"], outboundTag: "dns-out" },
         { type: "field", inboundTag: ["remote-dns"], ...proxyTarget },
         { type: "field", inboundTag: ["dns"], outboundTag: "direct" },
-        { type: "field", outboundTag: "direct", ip: ["geoip:private"] }
+        { type: "field", outboundTag: "direct", ip: [...PRIVATE_IP_CIDRS] }
     ];
 
     if (sysConfig.blockUDP443) {
@@ -227,26 +257,44 @@ export async function buildVJsonProfile(hostName, targetSub = null, allowInsecur
         });
     }
 
-    if (sysConfig.blockThreats) {
+    if (sysConfig.blockThreats || sysConfig.blockMalware || sysConfig.blockPhishing) {
+        const threatDomains = [...CORE_THREAT_DOMAINS];
+        if (Array.isArray(sysConfig.customBlockRules)) {
+            sysConfig.customBlockRules.forEach((d) => {
+                if (d && !threatDomains.includes(d)) threatDomains.push(d);
+            });
+        }
         routingRules.push({
             type: "field",
-            domain: ["geosite:category-ads-all", "domain:doubleclick.net"],
+            domain: threatDomains.map((d) => `domain:${d}`),
             outboundTag: "block"
         });
     }
 
     // Domestic bypass
-    routingRules.push(
-        { type: "field", outboundTag: "direct", ip: ["geoip:private", "geoip:ir"] },
-        { type: "field", outboundTag: "direct", domain: ["geosite:category-ir"] }
-    );
-
-    // Sanction bypass
-    if (sysConfig.bypassAi || sysConfig.bypassOpenAi) {
+    const customBypassIps = Array.isArray(sysConfig.customBypassRules)
+        ? sysConfig.customBypassRules.filter((r) => r.includes("/"))
+        : [];
+    if (customBypassIps.length > 0) {
         routingRules.push({
             type: "field",
             outboundTag: "direct",
-            domain: ["geosite:openai", "domain:openai.com", "domain:chatgpt.com"]
+            ip: customBypassIps
+        });
+    }
+
+    routingRules.push({
+        type: "field",
+        outboundTag: "direct",
+        domain: [...new Set(domesticDomains)]
+    });
+
+    // Sanction bypass
+    if (sanctionDomains.length > 0) {
+        routingRules.push({
+            type: "field",
+            outboundTag: "direct",
+            domain: [...new Set(sanctionDomains)]
         });
     }
 

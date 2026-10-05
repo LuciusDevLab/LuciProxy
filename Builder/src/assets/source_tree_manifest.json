@@ -1,9 +1,9 @@
 {
   "luciproxy_version": "1.1.0",
-  "snapshot_timestamp": "2026-10-05T18:43:31Z",
-  "total_files": 52,
-  "total_bytes": 1267079,
-  "tree_sha256": "50f1f0c8614648b9d9a0c83e44409d2725e2870d63ef18088bcf9ebe2cb685cd",
+  "snapshot_timestamp": "2026-10-05T19:57:36Z",
+  "total_files": 53,
+  "total_bytes": 1284098,
+  "tree_sha256": "8489eaa0286a6c579cd2734396ce69201c013aded6b9e831d98dae987040e348",
   "exclusions": [
     ".wrangler",
     ".wrangler/*",
@@ -33,8 +33,8 @@
     },
     {
       "path": "dist/index.js",
-      "sha256": "13c10ee475541f7c8663c3028adb34b51683424889c69a3b20f072b7f51f0209",
-      "size_bytes": 288272
+      "sha256": "1895293c10f5b99763da5ff2b1175cc6843afb083fe048411b021b12b055395e",
+      "size_bytes": 289630
     },
     {
       "path": "dist/index.js.map",
@@ -163,13 +163,13 @@
     },
     {
       "path": "src/subscriptions/routing.js",
-      "sha256": "c9758e7c75412fc8db3574448b25563a793ab698b5110dc0c4217d7dd61f6675",
-      "size_bytes": 4514
+      "sha256": "1864277439c917478840fdeeb8f20311d53964e47fdfdf36ae99e12b381a486b",
+      "size_bytes": 4608
     },
     {
       "path": "src/subscriptions/rules.js",
-      "sha256": "b9c0e11b360969c5f2021f3867f680de5a5974f62cb578ce3fd3449f3cab5edd",
-      "size_bytes": 14431
+      "sha256": "54139336dfc3338e1ea12c7422cb158515bce3c830464587bf6b78b763319abd",
+      "size_bytes": 14446
     },
     {
       "path": "src/subscriptions/singbox.js",
@@ -188,8 +188,8 @@
     },
     {
       "path": "src/subscriptions/v2ray.js",
-      "sha256": "2912915c6910eb8dbd58ea62202576f1d544d03f0c81d73ffd7fb9988cfb633f",
-      "size_bytes": 11917
+      "sha256": "f6d79b5ec5223b623496b7117034662aecb04576d0d7b0585f87610efc8b6e69",
+      "size_bytes": 13518
     },
     {
       "path": "src/subscriptions/wireguard.js",
@@ -218,8 +218,8 @@
     },
     {
       "path": "tests/canonical_policy.test.js",
-      "sha256": "161bceab33bec6ec58c3e950972068198a479101144e7f98a112f07f2aef5e0c",
-      "size_bytes": 27517
+      "sha256": "d2736de90740faf3d004f55db52f1b230754d2e93d1f3e25c717c3d96c39ce86",
+      "size_bytes": 27507
     },
     {
       "path": "tests/crypto.test.js",
@@ -260,6 +260,11 @@
       "path": "tests/phase6c_defects.test.js",
       "sha256": "709ba7f10eac87a122ec71bcbe82f3b2fabc74592d291c10f2266f643a4c71ae",
       "size_bytes": 11012
+    },
+    {
+      "path": "tests/phase6e_defects.test.js",
+      "sha256": "25a46d7e37ead3018d994cded43a70c0ba5536bda45aaa2def4dfeab286d126c",
+      "size_bytes": 13961
     },
     {
       "path": "tests/protocols.test.js",

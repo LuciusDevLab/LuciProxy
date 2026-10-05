@@ -472,7 +472,7 @@ test("Xray / V2Ray Compiler - Multi-tier DNS block, dokodemo inbound, and IPIfNo
     assert.ok(threatRule);
     assert.equal(threatRule.outboundTag, "block");
 
-    const domesticRule = rules.find((r) => r.domain?.includes("geosite:category-ir"));
+    const domesticRule = rules.find((r) => r.domain?.includes("domain:ir"));
     assert.ok(domesticRule);
     assert.equal(domesticRule.outboundTag, "direct");
 });

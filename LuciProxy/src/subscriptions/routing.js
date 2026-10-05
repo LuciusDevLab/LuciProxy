@@ -49,14 +49,6 @@ export function buildSingBoxRules(sysConfig = {}, defaultOutbound = "select") {
         {
             ip_is_private: true,
             outbound: "direct"
-        },
-        {
-            clash_mode: "Direct",
-            outbound: "direct"
-        },
-        {
-            clash_mode: "Global",
-            outbound: defaultOutbound
         }
     ];
 
@@ -70,7 +62,7 @@ export function buildSingBoxRules(sysConfig = {}, defaultOutbound = "select") {
         });
     }
 
-    // 2. Security Threat Rejection (Precedes destination bypasses)
+    // 2. Security Threat Rejection (Precedes destination bypasses and global mode)
     if (sysConfig.blockThreats || sysConfig.blockMalware || sysConfig.blockPhishing) {
         rules.push({
             domain_suffix: THREAT_DOMAINS,
@@ -79,7 +71,19 @@ export function buildSingBoxRules(sysConfig = {}, defaultOutbound = "select") {
         });
     }
 
-    // 3. Domestic Bypasses (Iran, etc.)
+    // 3. Client Core Mode Overrides (Direct / Global)
+    rules.push(
+        {
+            clash_mode: "Direct",
+            outbound: "direct"
+        },
+        {
+            clash_mode: "Global",
+            outbound: defaultOutbound
+        }
+    );
+
+    // 4. Domestic Bypasses (Iran, etc.)
     if (sysConfig.bypassIran) {
         rules.push({
             rule_set: ["geosite-ir"],
