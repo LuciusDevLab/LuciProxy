@@ -115,7 +115,7 @@ export async function buildVJsonProfile(hostName, targetSub = null, allowInsecur
                                         sec === "tls"
                                             ? { serverName: hName, allowInsecure: Boolean(allowInsecure) }
                                             : undefined,
-                                    wsSettings: { path, headers: { Host: hName } },
+                                    wsSettings: { path, host: hName },
                                     ...(xrayFm ? { finalmask: xrayFm } : {}),
                                 },
                             });
@@ -141,7 +141,7 @@ export async function buildVJsonProfile(hostName, targetSub = null, allowInsecur
                                         sec === "tls"
                                             ? { serverName: hName, allowInsecure: Boolean(allowInsecure) }
                                             : undefined,
-                                    wsSettings: { path, headers: { Host: hName } },
+                                    wsSettings: { path, host: hName },
                                     ...(xrayFm ? { finalmask: xrayFm } : {}),
                                 },
                             });
@@ -154,6 +154,11 @@ export async function buildVJsonProfile(hostName, targetSub = null, allowInsecur
     });
 
     const firstOutboundTag = outboundsArr[0]?.tag || "proxy";
+    const isMultiEndpoint = outboundsArr.length > 1;
+    const proxyTags = outboundsArr.map((o) => o.tag);
+    const proxyTarget = isMultiEndpoint
+        ? { balancerTag: "proxy-balancer" }
+        : { outboundTag: firstOutboundTag };
 
     // Canonical DNS block for Xray
     const directDnsAddr = dnsPolicy.isLocalSystem ? "8.8.8.8" : dnsPolicy.localDns;
@@ -208,7 +213,7 @@ export async function buildVJsonProfile(hostName, targetSub = null, allowInsecur
     // Routing rules with deterministic precedence
     const routingRules = [
         { type: "field", inboundTag: ["dns-in"], outboundTag: "dns-out" },
-        { type: "field", inboundTag: ["remote-dns"], outboundTag: firstOutboundTag },
+        { type: "field", inboundTag: ["remote-dns"], ...proxyTarget },
         { type: "field", inboundTag: ["dns"], outboundTag: "direct" },
         { type: "field", outboundTag: "direct", ip: ["geoip:private"] }
     ];
@@ -249,7 +254,7 @@ export async function buildVJsonProfile(hostName, targetSub = null, allowInsecur
     routingRules.push({
         type: "field",
         network: "tcp",
-        outboundTag: firstOutboundTag
+        ...proxyTarget
     });
 
     return {
@@ -283,6 +288,28 @@ export async function buildVJsonProfile(hostName, targetSub = null, allowInsecur
         routing: {
             domainStrategy: "IPIfNonMatch",
             rules: routingRules,
+            ...(isMultiEndpoint
+                ? {
+                      balancers: [
+                          {
+                              tag: "proxy-balancer",
+                              selector: proxyTags,
+                              strategy: { type: "leastPing" },
+                              fallbackTag: firstOutboundTag,
+                          },
+                      ],
+                  }
+                : {}),
         },
+        ...(isMultiEndpoint
+            ? {
+                  observatory: {
+                      subjectSelector: proxyTags,
+                      probeUrl: "https://www.gstatic.com/generate_204",
+                      probeInterval: "30s",
+                      enableConcurrency: true,
+                  },
+              }
+            : {}),
     };
 }

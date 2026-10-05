@@ -19,6 +19,16 @@ import { resolveFinalMask, formatClashFragmentYaml } from "./finalmask.js";
 
 import { resolveNetworkPolicy } from "./policy.js";
 
+export function formatClashServer(ip) {
+    if (!ip) return "";
+    const str = String(ip).trim();
+    if (str.includes(":")) {
+        const cleanIp = str.replace(/^\[|\]$/g, "");
+        return `"${cleanIp}"`;
+    }
+    return str;
+}
+
 export async function buildYamlProfile(hostName, targetSub = null, allowInsecure = false, sysConfig) {
     const ports = sysConfig.socketPorts
         ? sysConfig.socketPorts
@@ -115,7 +125,7 @@ export async function buildYamlProfile(hostName, targetSub = null, allowInsecure
                             proxies.push(
 `  - name: "${vName}"
     type: vless
-    server: ${ip}
+    server: ${formatClashServer(ip)}
     port: ${port}
     uuid: "${p.id}"
     ip-version: ${ipVersion}
@@ -144,7 +154,7 @@ export async function buildYamlProfile(hostName, targetSub = null, allowInsecure
                             proxies.push(
 `  - name: "${tName}"
     type: trojan
-    server: ${ip}
+    server: ${formatClashServer(ip)}
     port: ${port}
     password: "${p.id}"
     ip-version: ${ipVersion}
