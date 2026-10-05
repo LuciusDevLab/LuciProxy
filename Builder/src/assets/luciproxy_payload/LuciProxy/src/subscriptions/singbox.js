@@ -266,7 +266,7 @@ export async function buildSingBoxJsonProfile(hostName, targetSub = null, allowI
         dnsRules.push({ server: "dns-anti-sanction", rule_set: sanctionRuleSets });
     }
 
-    if (dnsPolicy.fakeDns) {
+    if (dnsPolicy.fakeDns && sysConfig?.enableTun) {
         dnsRules.push({ inbound: "tun-in", query_type: ["A", "AAAA"], server: "dns-fake" });
     }
 
@@ -290,7 +290,7 @@ export async function buildSingBoxJsonProfile(hostName, targetSub = null, allowI
         },
         inbounds: [
             { type: "mixed", tag: "mixed-in", listen: "127.0.0.1", listen_port: 2080 },
-            {
+            ...(sysConfig?.enableTun ? [{
                 type: "tun",
                 tag: "tun-in",
                 address: ["172.19.0.1/28"],
@@ -298,7 +298,7 @@ export async function buildSingBoxJsonProfile(hostName, targetSub = null, allowI
                 auto_route: true,
                 strict_route: true,
                 stack: "mixed"
-            }
+            }] : [])
         ],
         outbounds: [
             selectorGroup,

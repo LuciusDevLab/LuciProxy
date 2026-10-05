@@ -311,9 +311,14 @@ test("Sing-Box Compiler - Canonical DNS topologies, inbounds, and detours", asyn
     assert.equal(fakeServer.type, "fakeip");
     assert.equal(fakeServer.inet4_range, "198.18.0.0/15");
 
-    // 2. Inbounds verification (TUN + Mixed dual inbounds)
+    // 2. Inbounds verification (Default enableTun=false: Mixed inbound only, no TUN)
     assert.ok(profile.inbounds.some((i) => i.type === "mixed" && i.listen_port === 2080));
-    assert.ok(profile.inbounds.some((i) => i.type === "tun" && i.auto_route === true));
+    assert.ok(!profile.inbounds.some((i) => i.type === "tun"), "Default Sing-box profile must not have TUN inbound");
+
+    // Verify enableTun=true produces TUN inbound
+    const tunProfile = await buildSingBoxJsonProfile("edge.example.com", null, false, { ...config, enableTun: true });
+    assert.ok(tunProfile.inbounds.some((i) => i.type === "mixed" && i.listen_port === 2080));
+    assert.ok(tunProfile.inbounds.some((i) => i.type === "tun" && i.auto_route === true));
 
     // 3. Outbounds verification
     const vlessOutbound = profile.outbounds.find((o) => o.type === "vless");

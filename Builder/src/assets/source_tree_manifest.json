@@ -1,9 +1,9 @@
 {
   "luciproxy_version": "1.1.0",
-  "snapshot_timestamp": "2026-10-05T12:48:06Z",
-  "total_files": 50,
-  "total_bytes": 1244099,
-  "tree_sha256": "16d95c6305183982695bb1401885039e3fe580c8cd9109482558b0d4f1caea86",
+  "snapshot_timestamp": "2026-10-05T14:36:56Z",
+  "total_files": 51,
+  "total_bytes": 1254002,
+  "tree_sha256": "b99fe57f6b79f52ce3eb32b5ebc77aa28a169e9327440b1284b87e389935daf8",
   "exclusions": [
     ".wrangler",
     ".wrangler/*",
@@ -33,8 +33,8 @@
     },
     {
       "path": "dist/index.js",
-      "sha256": "b53789e44aa4e6b2f2a52d82a3b709db6d15a7dee105e288ef6ec7da6efb91a0",
-      "size_bytes": 286522
+      "sha256": "51350697f4fc2e9aff21b08e76afd52e3696d393ea47ad73fbb311a09773e711",
+      "size_bytes": 287448
     },
     {
       "path": "dist/index.js.map",
@@ -103,13 +103,13 @@
     },
     {
       "path": "src/protocols/dns_resolver.js",
-      "sha256": "4eca0c574cb08fadc9ddcb21980b443470cd62c1f57829171fd4ee76c3e356dc",
-      "size_bytes": 10995
+      "sha256": "4d94d0b8d7e2a4bab1cfc9ecf38a6de34541cc572f393994b4d6da96c7d2c604",
+      "size_bytes": 12480
     },
     {
       "path": "src/protocols/doh.js",
-      "sha256": "23f4e54e72f9bcebcf5fe2570ff51fae8a28e6a7f6032372118c622f9d55d20c",
-      "size_bytes": 5521
+      "sha256": "9bb0f88e77b89be971a29b30ab90cba53a8cc043e9455d83ebd661041429c10d",
+      "size_bytes": 5235
     },
     {
       "path": "src/protocols/proxy.js",
@@ -173,8 +173,8 @@
     },
     {
       "path": "src/subscriptions/singbox.js",
-      "sha256": "4c81199fff776fab148161dd4ff58ad29c48628429ddd8848c3b5a02c68a9af8",
-      "size_bytes": 13096
+      "sha256": "90538baea3874aebb6eb17df96fb738c909933bc211e7d30e5c80148092d1550",
+      "size_bytes": 13155
     },
     {
       "path": "src/subscriptions/tags.js",
@@ -218,8 +218,8 @@
     },
     {
       "path": "tests/canonical_policy.test.js",
-      "sha256": "09963c99e9f89cf16014b48a177cfa3dc5f9346e7824c6771f7f06c88bb2b0a6",
-      "size_bytes": 27106
+      "sha256": "161bceab33bec6ec58c3e950972068198a479101144e7f98a112f07f2aef5e0c",
+      "size_bytes": 27517
     },
     {
       "path": "tests/crypto.test.js",
@@ -250,6 +250,11 @@
       "path": "tests/phase5b_defects.test.js",
       "sha256": "53f28b06046a661bcf9aa3cd63b0f751688cc482e00aa23b2a16cd5ad3fe3042",
       "size_bytes": 23058
+    },
+    {
+      "path": "tests/phase6b_defects.test.js",
+      "sha256": "7db56e241e2e7b0e00d72ab53d27b0063aee316031f1b9554f8bb7ed7f58dfe1",
+      "size_bytes": 7308
     },
     {
       "path": "tests/protocols.test.js",

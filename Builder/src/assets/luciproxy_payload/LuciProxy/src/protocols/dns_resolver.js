@@ -154,18 +154,57 @@ export function uint8ArrayToBase64Url(u8) {
 }
 
 /**
+ * Normalizes a DoH endpoint URL for Cloudflare Worker subrequest compatibility.
+ * Replaces Cloudflare Anycast hostnames and raw IP literals (e.g. 8.8.8.8) with valid TLS hostnames (dns.google).
+ *
+ * @param {string} rawUrl Input DoH URL
+ * @returns {string} Normalized DoH URL
+ */
+export function normalizeDohUrl(rawUrl) {
+    if (!rawUrl || typeof rawUrl !== "string") {
+        return "https://dns.google/dns-query";
+    }
+
+    let trimmed = rawUrl.trim();
+    if (!trimmed) {
+        return "https://dns.google/dns-query";
+    }
+
+    // Guard against Cloudflare Anycast socket stall in Worker subrequests
+    if (trimmed.includes("cloudflare-dns.com") || trimmed.includes("://1.1.1.1/") || trimmed.includes("://1.0.0.1/")) {
+        trimmed = "https://dns.google/dns-query";
+    }
+
+    try {
+        const parsed = new URL(trimmed);
+        if (parsed.hostname === "8.8.8.8" || parsed.hostname === "8.8.4.4") {
+            parsed.hostname = "dns.google";
+            return parsed.toString();
+        }
+        if (parsed.hostname === "1.1.1.1" || parsed.hostname === "1.0.0.1") {
+            return "https://dns.google/dns-query";
+        }
+        return parsed.toString();
+    } catch {
+        return "https://dns.google/dns-query";
+    }
+}
+
+/**
  * Resolves a domain name using either RFC 8484 wireformat or JSON DoH resolver.
  * @param {string} domain Domain name to resolve
  * @param {string} dohUrl DoH resolver URL
  * @param {string} [recordType="A"] "A" or "AAAA"
  * @param {number} [timeoutMs=5000] Timeout in milliseconds
- * @param {string} [fallbackDohUrl="https://8.8.8.8/dns-query"] Fallback DoH URL on failure
+ * @param {string} [fallbackDohUrl="https://dns.google/dns-query"] Fallback DoH URL on failure
  * @returns {Promise<string|null>} Resolved IP address or null
  */
-export async function resolveDomainDoh(domain, dohUrl, recordType = "A", timeoutMs = 5000, fallbackDohUrl = "https://8.8.8.8/dns-query") {
-    if (!domain || !dohUrl) return null;
+export async function resolveDomainDoh(domain, dohUrl, recordType = "A", timeoutMs = 5000, fallbackDohUrl = "https://dns.google/dns-query") {
+    if (!domain) return null;
     const cleanDomain = domain.trim().toLowerCase();
-    const cacheKey = `${cleanDomain}:${recordType}:${dohUrl}`;
+    const activeDohUrl = normalizeDohUrl(dohUrl || fallbackDohUrl);
+    const activeFallback = fallbackDohUrl ? normalizeDohUrl(fallbackDohUrl) : null;
+    const cacheKey = `${cleanDomain}:${recordType}:${activeDohUrl}`;
 
     const cached = dnsCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
@@ -177,17 +216,17 @@ export async function resolveDomainDoh(domain, dohUrl, recordType = "A", timeout
 
     let parsedUrl;
     try {
-        parsedUrl = new URL(dohUrl);
+        parsedUrl = new URL(activeDohUrl);
     } catch {
-        if (fallbackDohUrl && fallbackDohUrl !== dohUrl) {
-            return resolveDomainDoh(cleanDomain, fallbackDohUrl, recordType, timeoutMs, null);
+        if (activeFallback && activeFallback !== activeDohUrl) {
+            return resolveDomainDoh(cleanDomain, activeFallback, recordType, timeoutMs, null);
         }
         return null;
     }
 
     const tryFallback = async () => {
-        if (fallbackDohUrl && fallbackDohUrl !== dohUrl) {
-            return await resolveDomainDoh(cleanDomain, fallbackDohUrl, recordType, timeoutMs, null);
+        if (activeFallback && activeFallback !== activeDohUrl) {
+            return await resolveDomainDoh(cleanDomain, activeFallback, recordType, timeoutMs, null);
         }
         return null;
     };
@@ -198,7 +237,7 @@ export async function resolveDomainDoh(domain, dohUrl, recordType = "A", timeout
     try {
         if (isJsonEndpoint) {
             // Mode B: JSON DoH API (e.g. Google https://dns.google/resolve)
-            const targetUrl = new URL(dohUrl);
+            const targetUrl = new URL(activeDohUrl);
             targetUrl.searchParams.set("name", cleanDomain);
             targetUrl.searchParams.set("type", recordType);
 
@@ -222,7 +261,7 @@ export async function resolveDomainDoh(domain, dohUrl, recordType = "A", timeout
             // Mode A: RFC 8484 wireformat DoH endpoint via GET ?dns= (standard, avoiding 411 Length Required)
             const wireQuery = encodeDnsQuery(cleanDomain, qtype);
             const b64 = uint8ArrayToBase64Url(wireQuery);
-            const queryUrl = new URL(dohUrl);
+            const queryUrl = new URL(activeDohUrl);
             queryUrl.searchParams.set("dns", b64);
 
             const res = await fetchT(queryUrl.toString(), {
@@ -279,7 +318,8 @@ export async function forwardUdpDnsPacket(rawPayload, isVless, sysConfig = {}) {
 
     if (!dnsQueryBytes || dnsQueryBytes.byteLength < 12) return null;
 
-    const dohUrl = sysConfig.customDns || sysConfig.remoteDns || "https://8.8.8.8/dns-query";
+    const rawDoh = sysConfig.customDns || sysConfig.remoteDns || "https://dns.google/dns-query";
+    const dohUrl = normalizeDohUrl(rawDoh);
 
     try {
         const b64 = uint8ArrayToBase64Url(dnsQueryBytes);

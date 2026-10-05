@@ -5,22 +5,15 @@
  * Independent implementation authored specifically for LuciProxy.
  */
 
-import { encodeDnsQuery, parseDnsResponse, uint8ArrayToBase64Url } from "./dns_resolver.js";
+import { encodeDnsQuery, parseDnsResponse, uint8ArrayToBase64Url, normalizeDohUrl } from "./dns_resolver.js";
 
 export async function handleDoH(request, sysConfig = {}) {
-    let upstreamDoh = sysConfig.customDns || sysConfig.remoteDns || "https://dns.google/dns-query";
-    if (upstreamDoh.includes("cloudflare-dns.com")) {
-        upstreamDoh = "https://dns.google/dns-query";
-    }
+    const rawUpstream = sysConfig.customDns || sysConfig.remoteDns || "https://dns.google/dns-query";
+    const upstreamDoh = normalizeDohUrl(rawUpstream);
 
     try {
         const reqUrl = new URL(request.url);
         const targetUrl = new URL(upstreamDoh);
-
-        // Normalize IP literal 8.8.8.8 to dns.google for Worker HTTPS subrequest TLS SNI verification
-        if (targetUrl.hostname === "8.8.8.8") {
-            targetUrl.hostname = "dns.google";
-        }
 
         // 1. Handle JSON DoH queries (e.g. ?name=...&type=...)
         if (request.method === "GET" && reqUrl.searchParams.has("name") && !reqUrl.searchParams.has("dns")) {
@@ -28,7 +21,7 @@ export async function handleDoH(request, sysConfig = {}) {
             const typeStr = (reqUrl.searchParams.get("type") || "A").toUpperCase();
             const qtype = typeStr === "AAAA" ? 28 : 1;
 
-            if (targetUrl.hostname.includes("google") || targetUrl.hostname === "8.8.8.8") {
+            if (targetUrl.hostname.includes("google")) {
                 const resolveUrl = new URL("https://dns.google/resolve");
                 reqUrl.searchParams.forEach((val, key) => resolveUrl.searchParams.set(key, val));
 
