@@ -16,8 +16,8 @@ def test_load_manifest_production():
     mgr = EmbeddedArtifactManager()
     manifest = mgr.load_manifest()
 
-    assert manifest.luciproxy_version == "1.1.0"
-    assert manifest.git_commit == "5b32a2b7d6656f393a047cd3b2a65441021cadad"
+    assert manifest.luciproxy_version == "1.2.0"
+    assert manifest.git_commit == "0b7cb450c47f795ffd2ecd09e70e7ce66e8853ec"
     assert len(manifest.artifact_sha256) == 64
     assert manifest.artifact_sha256 == hashlib.sha256(mgr.bundle_file.read_text(encoding="utf-8").encode("utf-8")).hexdigest().lower()
     assert manifest.d1_binding_name == "IOT_DB"

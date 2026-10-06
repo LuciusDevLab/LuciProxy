@@ -286,13 +286,13 @@ class SourceTreeManager:
             try:
                 pkg_file = src / "package.json"
                 if pkg_file.exists():
-                    version = json.loads(pkg_file.read_text(encoding="utf-8")).get("version", "1.1.0")
+                    version = json.loads(pkg_file.read_text(encoding="utf-8")).get("version", "1.2.0")
                 else:
                     ver_file = src / "version.json"
                     if ver_file.exists():
-                        version = json.loads(ver_file.read_text(encoding="utf-8")).get("version", "1.1.0")
+                        version = json.loads(ver_file.read_text(encoding="utf-8")).get("version", "1.2.0")
             except Exception:
-                version = "1.1.0"
+                version = "1.2.0"
 
         # Clean/create target payload directory
         if dest.exists():

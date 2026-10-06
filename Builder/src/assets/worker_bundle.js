@@ -1,5 +1,5 @@
 // LuciProxy/src/config.js
-var CURRENT_VERSION = "1.1.0";
+var CURRENT_VERSION = "1.2.0";
 var DEFAULT_ECH_CONFIGS = [
   "cloudflare-ech.com+udp://1.1.1.1",
   "geedo.com+udp://1.1.1.1",

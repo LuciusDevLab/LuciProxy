@@ -1,8 +1,8 @@
 {
-  "luciproxy_version": "1.1.0",
-  "git_commit": "5b32a2b7d6656f393a047cd3b2a65441021cadad",
-  "artifact_sha256": "f8d3552fbc812066bada88c51c90851e2682a4a572ce00cd4ac4a66c47ad333c",
-  "builder_version": "1.1.0",
+  "luciproxy_version": "1.2.0",
+  "git_commit": "0b7cb450c47f795ffd2ecd09e70e7ce66e8853ec",
+  "artifact_sha256": "cb7c9803c8d945f2106122597e1d42ab96a1f1c31fa414d12717b18e724c015f",
+  "builder_version": "1.2.0",
   "build_timestamp": "2026-10-03T19:00:00Z",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": [

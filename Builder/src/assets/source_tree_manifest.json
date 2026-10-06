@@ -1,9 +1,9 @@
 {
-  "luciproxy_version": "1.1.0",
-  "snapshot_timestamp": "2026-10-05T19:57:36Z",
+  "luciproxy_version": "1.2.0",
+  "snapshot_timestamp": "2026-10-05T22:19:53Z",
   "total_files": 53,
-  "total_bytes": 1284098,
-  "tree_sha256": "8489eaa0286a6c579cd2734396ce69201c013aded6b9e831d98dae987040e348",
+  "total_bytes": 1284174,
+  "tree_sha256": "156c82e5004306c6978ddd5484cd9eb24bba37c5b86c5bd1874fdc8f5406ac66",
   "exclusions": [
     ".wrangler",
     ".wrangler/*",
@@ -33,7 +33,7 @@
     },
     {
       "path": "dist/index.js",
-      "sha256": "1895293c10f5b99763da5ff2b1175cc6843afb083fe048411b021b12b055395e",
+      "sha256": "448b5dfb76f79c204a434e5ee74ea240d6048eeddcdc8c6397ee94e4f13fcd26",
       "size_bytes": 289630
     },
     {
@@ -43,7 +43,7 @@
     },
     {
       "path": "package.json",
-      "sha256": "674b88fba77a80f0b05f3b6cc413579cc358858fe3228bd97203ad253473b14e",
+      "sha256": "6815ade6a0cae85a10ccacb84d35fd05e7b214ccd009e325841cd379f53f2be3",
       "size_bytes": 496
     },
     {
@@ -88,7 +88,7 @@
     },
     {
       "path": "src/config.js",
-      "sha256": "dddd497cdc9277897652cd26305c5614699d2e2967c6f177f9a752748b6d81c2",
+      "sha256": "9077a157c71335e418828dce4bf9eb23d4a5c1e37a3f9b498292237f2d78a658",
       "size_bytes": 6035
     },
     {
@@ -283,8 +283,8 @@
     },
     {
       "path": "version.json",
-      "sha256": "1b1fc6ff978be56724f39dc6d6616211d802bf0c97e1e737a1f850fb61bfb020",
-      "size_bytes": 277
+      "sha256": "198b1857251a7bef593c48a4d5a7c9f8fa84efd8120ba02ea7b1ff6141b38c4f",
+      "size_bytes": 353
     },
     {
       "path": "wrangler.json",

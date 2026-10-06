@@ -6,7 +6,7 @@ Authoritative source for the local Builder version and GitHub update metadata.
 import re
 from typing import Optional, Tuple
 
-BUILDER_VERSION = "1.1.0"
+BUILDER_VERSION = "1.2.0"
 __version__ = BUILDER_VERSION
 
 REPO_URL = "https://github.com/LuciusDevLab/LuciProxy"

@@ -5,7 +5,7 @@
  * Independent implementation authored specifically for LuciProxy.
  */
 
-export const CURRENT_VERSION = "1.1.0";
+export const CURRENT_VERSION = "1.2.0";
 
 export const DEFAULT_ECH_CONFIGS = [
     "cloudflare-ech.com+udp://1.1.1.1",

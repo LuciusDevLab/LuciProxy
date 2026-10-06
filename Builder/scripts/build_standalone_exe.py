@@ -79,8 +79,8 @@ def build_exe():
     code, sha256 = wb.bundle_worker(luciproxy_dir, output_file=dist_worker)
     builder_worker.write_text(code, encoding="utf-8")
     manifest_data = json.loads(manifest_file.read_text(encoding="utf-8"))
-    manifest_data["luciproxy_version"] = "1.1.0"
-    manifest_data["builder_version"] = "1.1.0"
+    manifest_data["luciproxy_version"] = "1.2.0"
+    manifest_data["builder_version"] = "1.2.0"
     manifest_data["artifact_sha256"] = sha256
     manifest_file.write_text(json.dumps(manifest_data, indent=2) + "\n", encoding="utf-8")
     print(f"      [OK] Worker bundle compiled ({len(code):,} chars, SHA-256: {sha256[:16]}...).")

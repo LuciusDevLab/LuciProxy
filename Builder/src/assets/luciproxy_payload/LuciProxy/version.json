@@ -1,7 +1,7 @@
 {
-  "version": "1.1.0",
+  "version": "1.2.0",
   "repo_url": "https://github.com/LuciusDevLab/LuciProxy",
   "release_url": "https://github.com/LuciusDevLab/LuciProxy/releases",
-  "changelog": "v1.1.0: FinalMask URI serialization and client import compatibility fix.",
-  "released_at": "2026-10-04"
+  "changelog": "v1.2.0: Network resilience hardening, cross-client parity, independent geodata routing, and full E2E verification across Sing-box, Mihomo, and Xray.",
+  "released_at": "2026-10-06"
 }

@@ -60,7 +60,7 @@ LuciProxy/
 │   │   ├── assets/                # Web dashboard, subscriber portal, and camouflage pages
 │   │   └── utils/                 # Cryptographic routines, NAT64, and network helpers
 │   ├── tests/                     # 67 automated Node.js regression test suites
-│   ├── package.json               # ESM package definition (v1.0.0)
+│   ├── package.json               # ESM package definition (v1.2.0)
 │   └── wrangler.json              # Canonical Cloudflare Workers configuration template
 ├── docs/                          # Architecture & Environment Documentation
 │   ├── ARCHITECTURE.md            # System architecture & edge data flows
