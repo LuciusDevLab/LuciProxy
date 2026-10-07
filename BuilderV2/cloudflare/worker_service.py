@@ -58,13 +58,13 @@ class WorkerService:
     def get_worker(self, account_id: str, script_name: str) -> Optional[WorkerSummaryDto]:
         """
         Retrieves top-level metadata for a specific Worker script.
-        Endpoint: GET /client/v4/accounts/{account_id}/workers/scripts/{script_name}
+        Endpoint: GET /client/v4/accounts/{account_id}/workers/scripts/{script_name}/settings
         """
         try:
             res = self.client.request(
                 "GET",
-                f"/accounts/{account_id}/workers/scripts/{script_name}",
-                step="Get Worker Script"
+                f"/accounts/{account_id}/workers/scripts/{script_name}/settings",
+                step="Get Worker Settings"
             )
             item = res.get("result", {})
             if not item:

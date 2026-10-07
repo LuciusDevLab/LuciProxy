@@ -47,7 +47,7 @@ class WorkerInstaller:
         if not token:
             raise ValueError(f"No active Cloudflare token found for connection '{connection_id}'.")
 
-        client = CloudflareClient(token=token, timeout=30)
+        client = CloudflareClient(token=token, timeout=120)
         d1_svc = D1Service(client)
         worker_svc = WorkerService(client, d1_service=d1_svc)
         return client, worker_svc, d1_svc
