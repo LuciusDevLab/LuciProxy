@@ -1,7 +1,8 @@
 {
-  "version": "1.2.0",
+  "version": "1.2.1",
+  "source_revision": "3aafad12745c59a849610d603fc22b22f656ac36",
   "repo_url": "https://github.com/LuciusDevLab/LuciProxy",
   "release_url": "https://github.com/LuciusDevLab/LuciProxy/releases",
-  "changelog": "v1.2.0: Network resilience hardening, cross-client parity, independent geodata routing, and full E2E verification across Sing-box, Mihomo, and Xray.",
-  "released_at": "2026-10-06"
+  "changelog": "v1.2.1: Modern Worker release with clean-room Proxy IP pool management, multi-client routing parity (Xray, Sing-box, Mihomo/Clash), and immutable source-based deployment.",
+  "released_at": "2026-10-07"
 }
