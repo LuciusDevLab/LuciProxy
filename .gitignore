@@ -54,3 +54,15 @@ BuilderV2/build/
 # Scratch & Diagnostics
 scratch/
 *.log
+
+# Releases Archive
+releases/
+
+# Android Build Outputs
+.gradle/
+BuilderV2/android/local.properties
+BuilderV2/android/.gradle/
+BuilderV2/android/app/build/
+BuilderV2/android/build/
+*.apk
+*.aab
