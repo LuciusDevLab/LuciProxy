@@ -5,19 +5,11 @@
  * Independent implementation authored specifically for LuciProxy.
  */
 
-import {
-    getAllProfiles,
-    getProfileHostNames,
-    getEffectivePips,
-    getCleanIpsWithNames,
-    calcEffectiveIps
-} from "../users/manager.js";
-import { getTransportParams } from "../utils/helpers.js";
-import { getConfigName, getFakeConfigNames } from "./tags.js";
+import { getFakeConfigNames } from "./tags.js";
 import { buildClashRules } from "./routing.js";
-import { resolveFinalMask, formatClashFragmentYaml } from "./finalmask.js";
-
+import { formatClashFragmentYaml } from "./finalmask.js";
 import { resolveNetworkPolicy } from "./policy.js";
+import { getResolvedEndpointPopulation } from "./population.js";
 
 export function formatClashServer(ip) {
     if (!ip) return "";
@@ -29,45 +21,19 @@ export function formatClashServer(ip) {
     return str;
 }
 
-export async function buildYamlProfile(hostName, targetSub = null, allowInsecure = false, sysConfig) {
-    const ports = sysConfig.socketPorts
-        ? sysConfig.socketPorts
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean)
-        : ["443"];
-    const reqPath = encodeURI(`/${sysConfig.apiRoute}`);
-
-    const policy = resolveNetworkPolicy(sysConfig, "PROXIES");
+export async function buildYamlProfile(hostName, targetSub = null, allowInsecure = false, sysConfig = {}, runtimeOverrides = {}) {
+    const policy = resolveNetworkPolicy(sysConfig, "PROXIES", runtimeOverrides.alpn);
     const dnsPolicy = policy.dns;
 
     const proxies = [];
     const realProxyNames = [];
     const fakeProxyNames = [];
-    const nameCounts = {};
 
-    const getUniqueName = (baseName) => {
-        if (!nameCounts[baseName]) {
-            nameCounts[baseName] = 1;
-            return baseName;
-        }
-        let counter = nameCounts[baseName];
-        let newName = `${baseName}-${counter}`;
-        while (nameCounts[newName]) {
-            counter++;
-            newName = `${baseName}-${counter}`;
-        }
-        nameCounts[baseName] = counter + 1;
-        nameCounts[newName] = 1;
-        return newName;
-    };
-
-    // 1. Add fake configs
+    // 1. Add fake config informational nodes
     const fakeNames = getFakeConfigNames(sysConfig, targetSub);
     fakeNames.forEach((name) => {
-        const uName = getUniqueName(name);
         proxies.push(
-`  - name: "${uName}"
+`  - name: "${name}"
     type: trojan
     server: 127.0.0.1
     port: 80
@@ -75,109 +41,64 @@ export async function buildYamlProfile(hostName, targetSub = null, allowInsecure
     udp: false
     tls: false`
         );
-        fakeProxyNames.push(`"${uName}"`);
+        fakeProxyNames.push(`"${name}"`);
     });
 
-    // 2. Iterate profiles
-    const profiles = getAllProfiles(sysConfig, targetSub);
-    profiles.forEach((p) => {
-        const resolvedFm = resolveFinalMask(p, sysConfig);
-        const pips = getEffectivePips(p, sysConfig);
-        const effectiveMode = p.userMode || sysConfig.mode;
-        const effectivePorts = p.userPorts
-            ? p.userPorts
-                  .split(",")
-                  .map((s) => s.trim())
-                  .filter(Boolean)
-            : ports;
-        const maxCfg = p.maxConfigs || null;
-        const profileHostNames = getProfileHostNames(hostName, p);
+    // 2. Resolve canonical endpoint population
+    const population = getResolvedEndpointPopulation(hostName, targetSub, allowInsecure, sysConfig, runtimeOverrides);
 
-        let configIndex = 0;
+    population.forEach((item) => {
+        const ipVersion = dnsPolicy.enableIPv6 ? "ipv4-prefer" : "ipv4";
+        const clashFragYaml = formatClashFragmentYaml(item.finalMask, item.isTls, "    ");
+        const alpnYaml = item.alpn && item.alpn.length > 0
+            ? `\n    alpn:\n${item.alpn.map((a) => `      - ${a}`).join("\n")}`
+            : "";
 
-        profileHostNames.forEach((hName) => {
-            const rawEntries = getCleanIpsWithNames(hName, p.cleanIp, sysConfig);
-            const hasPrimary = rawEntries.some((e) => e.ip.toLowerCase() === hName.toLowerCase());
-            const ipEntries = hasPrimary ? [...rawEntries] : [...rawEntries, { ip: hName, name: "" }];
-            const allIps = ipEntries.map((e) => e.ip);
-            const ips = calcEffectiveIps(allIps, maxCfg, effectiveMode, effectivePorts, pips.length);
-
-            const ipNameMap = {};
-            ipEntries.forEach((e) => {
-                ipNameMap[e.ip] = e.name;
-            });
-
-            effectivePorts.forEach((port) => {
-                const sec = getTransportParams(port) === "tls" ? "true" : "false";
-                const clashFragYaml = formatClashFragmentYaml(resolvedFm, sec === "true", "    ");
-                const ipVersion = dnsPolicy.enableIPv6 ? "ipv4-prefer" : "ipv4";
-
-                ips.forEach((ip) => {
-                    const _pips = pips.length > 0 ? pips : [null];
-                    _pips.forEach((selectedProxyIp) => {
-                        const ipName = ipNameMap[ip] || "";
-
-                        // VLESS Outbound
-                        if (effectiveMode === "alpha" || effectiveMode === "both") {
-                            const vName = getUniqueName(
-                                getConfigName("alpha", p.name, port, hName, ip, selectedProxyIp, configIndex, ipName, sysConfig)
-                            );
-                            proxies.push(
-`  - name: "${vName}"
+        if (item.protocol === "alpha") {
+            proxies.push(
+`  - name: "${item.tag}"
     type: vless
-    server: ${formatClashServer(ip)}
-    port: ${port}
-    uuid: "${p.id}"
+    server: ${formatClashServer(item.server)}
+    port: ${item.port}
+    uuid: "${item.uuid}"
     ip-version: ${ipVersion}
     udp: false
-    tls: ${sec}
+    tls: ${item.isTls}
     network: ws
-    servername: ${hName}
-    skip-cert-verify: ${allowInsecure}
-    client-fingerprint: ${sysConfig.agent || 'chrome'}
+    servername: ${item.host}
+    skip-cert-verify: ${item.allowInsecure}
+    client-fingerprint: ${item.fingerprint}${alpnYaml}
     ws-opts:
-      path: "${reqPath}"
+      path: "${item.path}"
       headers:
-        Host: ${hName}
+        Host: ${item.host}
       early-data-header-name: Sec-WebSocket-Protocol
       max-early-data: 2560${clashFragYaml}`
-                            );
-                            realProxyNames.push(`"${vName}"`);
-                            configIndex++;
-                        }
-
-                        // Trojan Outbound
-                        if (effectiveMode === "beta" || effectiveMode === "both") {
-                            const tName = getUniqueName(
-                                getConfigName("beta", p.name, port, hName, ip, selectedProxyIp, configIndex, ipName, sysConfig)
-                            );
-                            proxies.push(
-`  - name: "${tName}"
+            );
+            realProxyNames.push(`"${item.tag}"`);
+        } else if (item.protocol === "beta") {
+            proxies.push(
+`  - name: "${item.tag}"
     type: trojan
-    server: ${formatClashServer(ip)}
-    port: ${port}
-    password: "${p.id}"
+    server: ${formatClashServer(item.server)}
+    port: ${item.port}
+    password: "${item.password}"
     ip-version: ${ipVersion}
     udp: false
-    tls: ${sec}
+    tls: ${item.isTls}
     network: ws
-    sni: ${hName}
-    skip-cert-verify: ${allowInsecure}
-    client-fingerprint: ${sysConfig.agent || 'chrome'}
+    sni: ${item.host}
+    skip-cert-verify: ${item.allowInsecure}
+    client-fingerprint: ${item.fingerprint}${alpnYaml}
     ws-opts:
-      path: "${reqPath}"
+      path: "${item.path}"
       headers:
-        Host: ${hName}
+        Host: ${item.host}
       early-data-header-name: Sec-WebSocket-Protocol
       max-early-data: 2560${clashFragYaml}`
-                            );
-                            realProxyNames.push(`"${tName}"`);
-                            configIndex++;
-                        }
-                    });
-                });
-            });
-        });
+            );
+            realProxyNames.push(`"${item.tag}"`);
+        }
     });
 
     const clashRules = buildClashRules(sysConfig, "PROXIES");

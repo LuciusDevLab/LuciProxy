@@ -9,7 +9,8 @@ import {
     usageTotalBytes,
     usageDailyBytes,
     limitReqToBytes,
-    REQ_BYTES_EST
+    REQ_BYTES_EST,
+    isCloudflareIp
 } from "../utils/helpers.js";
 import {
     getCachedConfig,
@@ -21,6 +22,8 @@ import {
 } from "../db/d1.js";
 import { isAuthorized } from "../auth/auth.js";
 import { logActivity } from "../api/logs.js";
+import { DEFAULT_BACKUP_RELAYS } from "../config.js";
+import { getEffectiveProxyIpPool, isUserProxyIpOverrideActive, parseProxyIpList } from "../subscriptions/proxyip.js";
 
 // Concurrency tracking: active live socket streams per user UUID
 export const activeConns = new Map();
@@ -46,7 +49,12 @@ function normalizeIdentifier(rawId) {
  */
 export function getAllProfiles(sysConfig, targetSubscriber = null) {
     const defaultId = sysConfig.deviceId || "00000000-0000-4000-8000-000000000000";
-    const profiles = [{ id: defaultId, name: "Default" }];
+    const profiles = [{
+        id: defaultId,
+        name: "Default",
+        enableProxyIp: sysConfig.enableProxyIp !== false,
+        proxyIpMode: sysConfig.proxyIpMode || "builtin"
+    }];
     const usageData = getCachedUsage();
 
     const userList = Array.isArray(sysConfig?.users) ? sysConfig.users : [];
@@ -89,6 +97,8 @@ export function getAllProfiles(sysConfig, targetSubscriber = null) {
             profiles.push({
                 id: account.id,
                 name: account.name || "Subscriber",
+                enableProxyIp: account.enableProxyIp !== false,
+                proxyIpMode: account.proxyIpMode || (account.enableProxyIp === false ? "off" : undefined),
                 proxyIp: account.proxyIp || "",
                 cleanIp: account.cleanIp || null,
                 userMode: account.userMode || null,
@@ -105,6 +115,7 @@ export function getAllProfiles(sysConfig, targetSubscriber = null) {
                 userSocks5: account.userSocks5 || null,
                 dailyQuotaBytes: account.dailyQuotaBytes || null,
                 echConfigList: Array.isArray(account.echConfigList) ? account.echConfigList : null,
+                alpn: account.alpn || null,
                 finalMask: typeof account.finalMask === "string"
                     ? account.finalMask
                     : (account.finalMask && typeof account.finalMask === "object" ? account.finalMask : null),
@@ -130,7 +141,7 @@ export function getAllProfiles(sysConfig, targetSubscriber = null) {
  * @returns {Array<string>} Clean destination IP list
  */
 export function getCleanIps(hostName, customIpList = null, sysConfig = null) {
-    const rawContent = customIpList || sysConfig?.cleanIps || "";
+    const rawContent = customIpList || sysConfig?.cleanIps || sysConfig?.cleanIp || "";
     const parsed = rawContent
         .split(/[\r\n,;]+/)
         .map((entry) => {
@@ -156,7 +167,7 @@ export function getCleanIps(hostName, customIpList = null, sysConfig = null) {
  * @returns {Array<{ip: string, name: string}>} Array of IP objects with labels
  */
 export function getCleanIpsWithNames(hostName, customIpList = null, sysConfig = null) {
-    const rawContent = customIpList || sysConfig?.cleanIps || "";
+    const rawContent = customIpList || sysConfig?.cleanIps || sysConfig?.cleanIp || "";
     const results = rawContent
         .split(/[\r\n,;]+/)
         .map((entry) => {
@@ -203,11 +214,38 @@ export function getProfileHostNames(hostName, profile) {
  * @returns {Array<string>} Upstream proxy IP endpoints
  */
 export function getEffectivePips(profile, sysConfig) {
-    const rawSource = profile?.proxyIp || sysConfig?.backupRelay || sysConfig?.customRelay || "";
-    return rawSource
+    return getEffectiveProxyIpPool(profile, sysConfig);
+}
+
+/**
+ * Resolves verified non-Cloudflare upstream proxy IP relays for outbound Worker egress.
+ * Filters out Cloudflare CDN IPs because Workers cannot dial Cloudflare IPs directly.
+ * Strictly respects USER PROXY IP OVERRIDE > OPERATOR CUSTOM POOL > BUILT-IN POOL precedence.
+ * @param {object} profile Profile descriptor
+ * @param {object} sysConfig System configuration
+ * @returns {Array<string>} Verified non-Cloudflare relay endpoints
+ */
+export function getEffectiveOutboundRelays(profile, sysConfig) {
+    let rawSource = profile?.proxyIp || "";
+    let parsed = rawSource
         .split(/[\r\n,;]+/)
         .map((addr) => addr.trim())
-        .filter(Boolean);
+        .filter(Boolean)
+        .filter((addr) => !isCloudflareIp(addr));
+
+    if (parsed.length === 0 && (sysConfig?.backupRelay || sysConfig?.customRelay)) {
+        const sysRaw = sysConfig.backupRelay || sysConfig.customRelay || "";
+        parsed = sysRaw
+            .split(/[\r\n,;]+/)
+            .map((addr) => addr.trim())
+            .filter(Boolean)
+            .filter((addr) => !isCloudflareIp(addr));
+    }
+
+    if (parsed.length === 0 && Array.isArray(DEFAULT_BACKUP_RELAYS) && DEFAULT_BACKUP_RELAYS.length > 0) {
+        return [...DEFAULT_BACKUP_RELAYS];
+    }
+    return parsed;
 }
 
 /**
@@ -438,6 +476,7 @@ export async function handleUsersApi(request, env, ctx, sysConfig) {
                 limitDailyReq: Number(payload?.limitDailyReq) || 0,
                 dailyQuotaBytes: Number(payload?.dailyQuotaBytes) || 0,
                 expiryMs: Number(payload?.expiryMs) || 0,
+                enableProxyIp: payload?.enableProxyIp !== false,
                 proxyIp: payload?.proxyIp || "",
                 cleanIp: (payload?.cleanIp !== undefined && payload?.cleanIp !== null && String(payload.cleanIp).trim() !== "")
                     ? String(payload.cleanIp).trim()

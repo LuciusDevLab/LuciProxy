@@ -2,7 +2,7 @@
 
 **LuciProxy Builder** is a native, cross-platform Python CLI deployment and management wizard for **LuciProxy**.
 
-Derived behaviorally from [BPB-Wizard](https://github.com/bia-pain-bache/BPB-Wizard) (GPL-3.0), the LuciProxy Builder is completely reimplemented in pure Python 3 with hardened secret management (via Windows Credential Manager / OS keyring), native Cloudflare D1 Relational SQLite provisioning, multi-account handling, and automated post-deployment health validation.
+The LuciProxy Builder is completely implemented in pure Python 3 with hardened secret management (via Windows Credential Manager / OS keyring), native Cloudflare D1 Relational SQLite provisioning, multi-account handling, and automated post-deployment health validation.
 
 ---
 

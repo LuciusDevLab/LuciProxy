@@ -68,9 +68,9 @@ def test_is_name_allowed_rejects_denylist_terms():
         "singbox-gateway",
         "clash-provider",
         "amnezia-node",
-        "nahan-test",
-        "nova-service",
-        "bpb-wizard"
+        "shadowsocks-test",
+        "proxy-service",
+        "tunnel-wizard"
     ]
     for sample in banned_samples:
         assert not is_name_allowed(sample), f"Should have rejected '{sample}'"

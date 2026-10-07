@@ -5,17 +5,9 @@
  * Independent implementation authored specifically for LuciProxy.
  */
 
-import {
-    getAllProfiles,
-    getProfileHostNames,
-    getEffectivePips,
-    getCleanIpsWithNames,
-    calcEffectiveIps
-} from "../users/manager.js";
-import { getTransportParams } from "../utils/helpers.js";
-import { getConfigName, getFakeConfigNames } from "./tags.js";
-import { DEFAULT_ECH_CONFIGS } from "../config.js";
-import { resolveFinalMask, formatVlessFinalMaskParam, formatVlessFragmentParam } from "./finalmask.js";
+import { getFakeConfigNames } from "./tags.js";
+import { formatVlessFinalMaskParam } from "./finalmask.js";
+import { getResolvedEndpointPopulation } from "./population.js";
 
 /**
  * Formats TLS fragmentation parameters for URI links.
@@ -38,17 +30,8 @@ export function getFragmentQueryParam(sysConfig, profile = null) {
     return "";
 }
 
-export async function buildUriProfile(hostName, targetSub = null, allowInsecure = false, sysConfig) {
-    const ports = sysConfig.socketPorts
-        ? sysConfig.socketPorts
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean)
-        : ["443"];
-    const reqPath = encodeURI(`/${sysConfig.apiRoute}`);
-
+export async function buildUriProfile(hostName, targetSub = null, allowInsecure = false, sysConfig = {}, runtimeOverrides = {}) {
     const lines = [];
-    const profiles = getAllProfiles(sysConfig, targetSub);
 
     // 1. Add fake config informational nodes
     const fakeNames = getFakeConfigNames(sysConfig, targetSub);
@@ -58,111 +41,35 @@ export async function buildUriProfile(hostName, targetSub = null, allowInsecure 
         );
     });
 
-    // 2. Iterate through each profile
-    profiles.forEach((p) => {
-        const pips = getEffectivePips(p, sysConfig);
-        const effectiveMode = p.userMode || sysConfig.mode;
-        const effectivePorts = p.userPorts
-            ? p.userPorts
-                  .split(",")
-                  .map((s) => s.trim())
-                  .filter(Boolean)
-            : ports;
-        const maxCfg = p.maxConfigs || null;
-        const profileHostNames = getProfileHostNames(hostName, p);
-        const resolvedFm = resolveFinalMask(p, sysConfig);
-        const fmParam = formatVlessFinalMaskParam(resolvedFm, true) || getFragmentQueryParam(sysConfig, p);
+    // 2. Resolve canonical endpoint population
+    const population = getResolvedEndpointPopulation(hostName, targetSub, allowInsecure, sysConfig, runtimeOverrides);
 
-        // Precedence: per-subscription > global default
-        const effectiveEchList = Array.isArray(p.echConfigList)
-            ? p.echConfigList
-            : (Array.isArray(sysConfig?.echConfigList) ? sysConfig.echConfigList : DEFAULT_ECH_CONFIGS);
+    for (const item of population) {
+        const fmParam = formatVlessFinalMaskParam(item.finalMask, true) || getFragmentQueryParam(sysConfig, item);
+        const nodeTag = encodeURIComponent(item.tag);
 
-        const validEchList = (effectiveEchList || [])
-            .map((s) => String(s || "").trim())
-            .filter(Boolean);
-
-        let configIndex = 0;
-
-        profileHostNames.forEach((hName) => {
-            const rawEntries = getCleanIpsWithNames(hName, p.cleanIp, sysConfig);
-            // Ensure Primary endpoint hName is included in base configs
-            const hasPrimary = rawEntries.some((e) => e.ip.toLowerCase() === hName.toLowerCase());
-            const ipEntries = hasPrimary ? [...rawEntries] : [...rawEntries, { ip: hName, name: "" }];
-            const allIps = ipEntries.map((e) => e.ip);
-            const ips = calcEffectiveIps(allIps, maxCfg, effectiveMode, effectivePorts, pips.length);
-
-            const ipNameMap = {};
-            ipEntries.forEach((e) => {
-                ipNameMap[e.ip] = e.name;
-            });
-
-            effectivePorts.forEach((port) => {
-                const sec = getTransportParams(port);
-                const isTls = sec === "tls";
-                let extBase = `encryption=none&security=${sec}&sni=${hName}&fp=${sysConfig.agent}&type=ws&host=${hName}&path=${reqPath}`;
-                if (sysConfig.enableOpt2) extBase += `&pbk=enabled`;
-                extBase += `&allowInsecure=${allowInsecure ? "1" : "0"}`;
-                if (isTls && fmParam) extBase += fmParam;
-
-                ips.forEach((ip) => {
-                    const _pips = pips.length > 0 ? pips : [null];
-                    _pips.forEach((selectedProxyIp) => {
-                        const ipName = ipNameMap[ip] || "";
-
-                        // VLESS node
-                        if (effectiveMode === "alpha" || effectiveMode === "both") {
-                            const vName = getConfigName(
-                                "alpha",
-                                p.name,
-                                port,
-                                hName,
-                                ip,
-                                selectedProxyIp,
-                                configIndex,
-                                ipName,
-                                sysConfig
-                            );
-                            const nodeTag = encodeURIComponent(vName);
-
-                            if (validEchList.length > 0) {
-                                validEchList.forEach((echVal) => {
-                                    lines.push(`vless://${p.id}@${ip}:${port}?${extBase}&ech=${encodeURIComponent(echVal)}#${nodeTag}`);
-                                    configIndex++;
-                                });
-                            } else {
-                                lines.push(`vless://${p.id}@${ip}:${port}?${extBase}#${nodeTag}`);
-                                configIndex++;
-                            }
-                        }
-
-                        // Trojan node
-                        if (effectiveMode === "beta" || effectiveMode === "both") {
-                            let extTrojan = `security=${sec}&sni=${hName}&alpn=h2,http/1.1&fp=${sysConfig.agent}&type=ws&host=${hName}&path=${reqPath}`;
-                            extTrojan += `&allowInsecure=${allowInsecure ? "1" : "0"}`;
-                            if (isTls && fmParam) extTrojan += fmParam;
-
-                            const tName = getConfigName(
-                                "beta",
-                                p.name,
-                                port,
-                                hName,
-                                ip,
-                                selectedProxyIp,
-                                configIndex,
-                                ipName,
-                                sysConfig
-                            );
-                            const tNodeTag = encodeURIComponent(tName);
-
-                            lines.push(`trojan://${p.id}@${ip}:${port}?${extTrojan}#${tNodeTag}`);
-                            configIndex++;
-                        }
-                    });
-                });
-            });
-        });
-    });
+        if (item.protocol === "alpha") {
+            let extBase = `encryption=none&security=${item.sec}&sni=${item.sni}&fp=${item.fingerprint}&type=ws&host=${item.host}&path=${item.path}`;
+            if (sysConfig.enableOpt2) extBase += `&pbk=enabled`;
+            extBase += `&allowInsecure=${item.allowInsecure ? "1" : "0"}`;
+            if (item.alpn && item.alpn.length > 0) {
+                extBase += `&alpn=${encodeURIComponent(item.alpn.join(","))}`;
+            }
+            if (item.isTls && fmParam) extBase += fmParam;
+            if (item.echVal) {
+                extBase += `&ech=${encodeURIComponent(item.echVal)}`;
+            }
+            lines.push(`vless://${item.profileId}@${item.server}:${item.port}?${extBase}#${nodeTag}`);
+        } else if (item.protocol === "beta") {
+            let extTrojan = `security=${item.sec}&sni=${item.sni}&fp=${item.fingerprint}&type=ws&host=${item.host}&path=${item.path}`;
+            extTrojan += `&allowInsecure=${item.allowInsecure ? "1" : "0"}`;
+            if (item.alpn && item.alpn.length > 0) {
+                extTrojan += `&alpn=${encodeURIComponent(item.alpn.join(","))}`;
+            }
+            if (item.isTls && fmParam) extTrojan += fmParam;
+            lines.push(`trojan://${item.profileId}@${item.server}:${item.port}?${extTrojan}#${nodeTag}`);
+        }
+    }
 
     return lines.join("\n");
 }

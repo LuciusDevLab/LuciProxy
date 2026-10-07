@@ -457,27 +457,30 @@ export default {
                     return new Response(wgProfile, { headers: resHeaders });
                 }
 
+                const runtimeAlpn = url.searchParams.get("alpn") || undefined;
+                const runtimeOverrides = { alpn: runtimeAlpn };
+
                 if (isClashYaml) {
                     resHeaders.set("Content-Type", "text/yaml; charset=utf-8");
-                    const yamlProfile = await buildYamlProfile(clientHost, targetSub, allowInsecure, sysConfig);
+                    const yamlProfile = await buildYamlProfile(clientHost, targetSub, allowInsecure, sysConfig, runtimeOverrides);
                     return new Response(yamlProfile, { headers: resHeaders });
                 }
 
                 if (isSingboxJson) {
                     resHeaders.set("Content-Type", "application/json; charset=utf-8");
-                    const sbProfile = await buildSingBoxJsonProfile(clientHost, targetSub, allowInsecure, sysConfig);
+                    const sbProfile = await buildSingBoxJsonProfile(clientHost, targetSub, allowInsecure, sysConfig, runtimeOverrides);
                     return new Response(JSON.stringify(sbProfile, null, 2), { headers: resHeaders });
                 }
 
                 if (isV2rayJson) {
                     resHeaders.set("Content-Type", "application/json; charset=utf-8");
-                    const vProfile = await buildVJsonProfile(clientHost, targetSub, allowInsecure, sysConfig);
+                    const vProfile = await buildVJsonProfile(clientHost, targetSub, allowInsecure, sysConfig, runtimeOverrides);
                     return new Response(JSON.stringify(vProfile, null, 2), { headers: resHeaders });
                 }
 
                 // Default: Plaintext Base64 URIs
                 resHeaders.set("Content-Type", "text/plain; charset=utf-8");
-                const rawProfile = await buildUriProfile(clientHost, targetSub, allowInsecure, sysConfig);
+                const rawProfile = await buildUriProfile(clientHost, targetSub, allowInsecure, sysConfig, runtimeOverrides);
                 return new Response(safeBtoa(rawProfile), { headers: resHeaders });
             }
 

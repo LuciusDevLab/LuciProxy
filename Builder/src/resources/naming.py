@@ -22,6 +22,7 @@ DENYLIST: Set[str] = {
     "singbox",
     "wireguard",
     "amnezia",
+    "shadowsocks",
     "warp",
     "gateway",
     "relay",
@@ -30,10 +31,7 @@ DENYLIST: Set[str] = {
     "panel",
     "node",
     "luciproxy",
-    "luci",
-    "nahan",
-    "nova",
-    "bpb"
+    "luci"
 }
 
 # Curated, safe, neutral English adjectives (nature, colors, aesthetics)

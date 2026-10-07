@@ -5,17 +5,8 @@
  * Independent implementation authored specifically for LuciProxy.
  */
 
-import {
-    getAllProfiles,
-    getProfileHostNames,
-    getEffectivePips,
-    getCleanIpsWithNames,
-    calcEffectiveIps
-} from "../users/manager.js";
-import { getTransportParams } from "../utils/helpers.js";
-import { getConfigName } from "./tags.js";
-import { generateConfigUuid, safeBtoa } from "../utils/crypto.js";
-import { resolveFinalMask, formatXrayFinalMask } from "./finalmask.js";
+import { getResolvedEndpointPopulation } from "./population.js";
+import { formatXrayFinalMask } from "./finalmask.js";
 import { isIpAddress } from "./dns.js";
 import { resolveNetworkPolicy } from "./policy.js";
 import {
@@ -25,138 +16,75 @@ import {
     CORE_DEV_DOMAINS
 } from "./rules.js";
 
-export async function buildVJsonProfile(hostName, targetSub = null, allowInsecure = false, sysConfig) {
-    const ports = sysConfig.socketPorts
-        ? sysConfig.socketPorts
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean)
-        : ["443"];
-
-    const policy = resolveNetworkPolicy(sysConfig, "proxy");
+export async function buildVJsonProfile(hostName, targetSub = null, allowInsecure = false, sysConfig = {}, runtimeOverrides = {}) {
+    const policy = resolveNetworkPolicy(sysConfig, "proxy", runtimeOverrides.alpn);
     const dnsPolicy = policy.dns;
 
     const outboundsArr = [];
-    let configIndex = 0;
-    const nameCounts = {};
-
-    const getUniqueName = (baseName) => {
-        if (!nameCounts[baseName]) {
-            nameCounts[baseName] = 1;
-            return baseName;
-        }
-        let c = nameCounts[baseName];
-        nameCounts[baseName] = c + 1;
-        return `${baseName}-${c}`;
-    };
-
-    const profiles = getAllProfiles(sysConfig, targetSub);
     const allOutboundDomains = new Set();
     if (hostName && !isIpAddress(hostName)) {
         allOutboundDomains.add(hostName.trim());
     }
 
-    profiles.forEach((p) => {
-        const resolvedFm = resolveFinalMask(p, sysConfig);
-        const pips = getEffectivePips(p, sysConfig);
-        const effectiveMode = p.userMode || sysConfig.mode;
-        const effectivePorts = p.userPorts
-            ? p.userPorts
-                  .split(",")
-                  .map((s) => s.trim())
-                  .filter(Boolean)
-            : ports;
-        const maxCfg = p.maxConfigs || null;
-        const profileHostNames = getProfileHostNames(hostName, p);
+    const population = getResolvedEndpointPopulation(hostName, targetSub, allowInsecure, sysConfig, runtimeOverrides);
 
-        profileHostNames.forEach((hName) => {
-            if (hName && !isIpAddress(hName)) {
-                allOutboundDomains.add(hName.trim());
-            }
-            const rawEntries = getCleanIpsWithNames(hName, p.cleanIp, sysConfig);
-            const hasPrimary = rawEntries.some((e) => e.ip.toLowerCase() === hName.toLowerCase());
-            const ipEntries = hasPrimary ? [...rawEntries] : [...rawEntries, { ip: hName, name: "" }];
-            const allIps = ipEntries.map((e) => e.ip);
-            const ips = calcEffectiveIps(allIps, maxCfg, effectiveMode, effectivePorts, pips.length);
+    population.forEach((item) => {
+        if (item.host && !isIpAddress(item.host)) {
+            allOutboundDomains.add(item.host.trim());
+        }
+        const xrayFm = formatXrayFinalMask(item.finalMask, item.isTls);
 
-            const ipNameMap = {};
-            ipEntries.forEach((e) => {
-                ipNameMap[e.ip] = e.name;
+        if (item.protocol === "alpha") {
+            outboundsArr.push({
+                tag: item.tag,
+                protocol: "vless",
+                settings: {
+                    vnext: [
+                        {
+                            address: item.server,
+                            port: item.port,
+                            users: [{ id: item.uuid, encryption: "none" }],
+                        },
+                    ],
+                },
+                streamSettings: {
+                    network: "ws",
+                    security: item.sec,
+                    tlsSettings:
+                        item.isTls
+                            ? {
+                                  serverName: item.sni,
+                                  allowInsecure: item.allowInsecure,
+                                  ...(item.alpn ? { alpn: item.alpn } : {})
+                              }
+                            : undefined,
+                    wsSettings: { path: item.path, host: item.host },
+                    ...(xrayFm ? { finalmask: xrayFm } : {}),
+                },
             });
-
-            effectivePorts.forEach((port) => {
-                const sec = getTransportParams(port) === "tls" ? "tls" : "none";
-                const xrayFm = formatXrayFinalMask(resolvedFm, sec === "tls");
-                const portNum = parseInt(port, 10);
-
-                ips.forEach((ip) => {
-                    const _pips = pips.length > 0 ? pips : [null];
-                    _pips.forEach((selectedProxyIp) => {
-                        const ipName = ipNameMap[ip] || "";
-
-                        if (effectiveMode === "alpha" || effectiveMode === "both") {
-                            const tag = getUniqueName(
-                                getConfigName("alpha", p.name, port, hName, ip, selectedProxyIp, configIndex, ipName, sysConfig)
-                            );
-                            const configUuid = generateConfigUuid(p.id, configIndex);
-                            const payload = { protocol: "vl", relayIdx: configIndex };
-                            const path = `/${sysConfig.apiRoute}?ri=${configIndex}`;
-
-                            outboundsArr.push({
-                                tag,
-                                protocol: "vless",
-                                settings: {
-                                    vnext: [
-                                        {
-                                            address: ip,
-                                            port: portNum,
-                                            users: [{ id: configUuid, encryption: "none" }],
-                                        },
-                                    ],
-                                },
-                                streamSettings: {
-                                    network: "ws",
-                                    security: sec,
-                                    tlsSettings:
-                                        sec === "tls"
-                                            ? { serverName: hName, allowInsecure: Boolean(allowInsecure) }
-                                            : undefined,
-                                    wsSettings: { path, host: hName },
-                                    ...(xrayFm ? { finalmask: xrayFm } : {}),
-                                },
-                            });
-                            configIndex++;
-                        }
-
-                        if (effectiveMode === "beta" || effectiveMode === "both") {
-                            const tag = getUniqueName(
-                                getConfigName("beta", p.name, port, hName, ip, selectedProxyIp, configIndex, ipName, sysConfig)
-                            );
-                            const path = `/${sysConfig.apiRoute}?ri=${configIndex}`;
-
-                            outboundsArr.push({
-                                tag,
-                                protocol: "trojan",
-                                settings: {
-                                    servers: [{ address: ip, port: portNum, password: p.id }],
-                                },
-                                streamSettings: {
-                                    network: "ws",
-                                    security: sec,
-                                    tlsSettings:
-                                        sec === "tls"
-                                            ? { serverName: hName, allowInsecure: Boolean(allowInsecure) }
-                                            : undefined,
-                                    wsSettings: { path, host: hName },
-                                    ...(xrayFm ? { finalmask: xrayFm } : {}),
-                                },
-                            });
-                            configIndex++;
-                        }
-                    });
-                });
+        } else if (item.protocol === "beta") {
+            outboundsArr.push({
+                tag: item.tag,
+                protocol: "trojan",
+                settings: {
+                    servers: [{ address: item.server, port: item.port, password: item.password }],
+                },
+                streamSettings: {
+                    network: "ws",
+                    security: item.sec,
+                    tlsSettings:
+                        item.isTls
+                            ? {
+                                  serverName: item.sni,
+                                  allowInsecure: item.allowInsecure,
+                                  ...(item.alpn ? { alpn: item.alpn } : {})
+                              }
+                            : undefined,
+                    wsSettings: { path: item.path, host: item.host },
+                    ...(xrayFm ? { finalmask: xrayFm } : {}),
+                },
             });
-        });
+        }
     });
 
     const firstOutboundTag = outboundsArr[0]?.tag || "proxy";
@@ -172,6 +100,10 @@ export async function buildVJsonProfile(hostName, targetSub = null, allowInsecur
         {
             address: dnsPolicy.remoteDns,
             tag: "remote-dns"
+        },
+        {
+            address: directDnsAddr,
+            tag: "direct-dns"
         }
     ];
 
@@ -181,6 +113,7 @@ export async function buildVJsonProfile(hostName, targetSub = null, allowInsecur
         dnsServers.push({
             address: directDnsAddr,
             domains: outboundDomains.map((d) => `full:${d}`),
+            tag: "direct-dns",
             skipFallback: true
         });
     }
@@ -195,6 +128,7 @@ export async function buildVJsonProfile(hostName, targetSub = null, allowInsecur
     dnsServers.push({
         address: directDnsAddr,
         domains: [...new Set(domesticDomains)],
+        tag: "direct-dns",
         skipFallback: true
     });
 
@@ -214,8 +148,9 @@ export async function buildVJsonProfile(hostName, targetSub = null, allowInsecur
         dnsServers.push({
             address: dnsPolicy.antiSanctionDns,
             domains: [...new Set(sanctionDomains)],
-            skipFallback: true,
-            finalQuery: true
+            tag: "anti-sanction-dns",
+            queryStrategy: "UseIPv4",
+            skipFallback: true
         });
     }
 
@@ -244,7 +179,8 @@ export async function buildVJsonProfile(hostName, targetSub = null, allowInsecur
     const routingRules = [
         { type: "field", inboundTag: ["dns-in"], outboundTag: "dns-out" },
         { type: "field", inboundTag: ["remote-dns"], ...proxyTarget },
-        { type: "field", inboundTag: ["dns"], outboundTag: "direct" },
+        { type: "field", inboundTag: ["direct-dns", "anti-sanction-dns", "dns"], outboundTag: "direct" },
+        { type: "field", network: "udp", port: "53", outboundTag: "direct" },
         { type: "field", outboundTag: "direct", ip: [...PRIVATE_IP_CIDRS] }
     ];
 
@@ -318,7 +254,7 @@ export async function buildVJsonProfile(hostName, targetSub = null, allowInsecur
                 port: 10808,
                 protocol: "socks",
                 settings: { auth: "noauth", udp: true },
-                sniffing: { enabled: true, destOverride: ["http", "tls", ...(dnsPolicy.fakeDns ? ["fakedns"] : [])] },
+                sniffing: { enabled: true, destOverride: ["http", "tls", ...(dnsPolicy.fakeDns ? ["fakedns"] : [])], routeOnly: true },
             },
             {
                 port: 10853,

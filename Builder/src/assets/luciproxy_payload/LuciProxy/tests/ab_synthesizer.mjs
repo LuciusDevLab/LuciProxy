@@ -36,9 +36,9 @@ async function main() {
     const luciXray = await buildVJsonProfile('edge.example.com', null, false, config);
     fs.writeFileSync(scratchDir + '/luci_xray.json', JSON.stringify(luciXray, null, 2));
 
-    // 2. Synthesize BPB equivalent configurations
-    // BPB Sing-Box equivalent:
-    const bpbSb = {
+    // 2. Synthesize Reference equivalent configurations
+    // Reference Sing-Box equivalent:
+    const refSb = {
         log: { level: 'warn', timestamp: true },
         dns: {
             servers: [
@@ -87,7 +87,7 @@ async function main() {
         outbounds: [
             {
                 type: 'vless',
-                tag: 'BPB-VLESS-443-104.16.1.1',
+                tag: 'Ref-VLESS-443-104.16.1.1',
                 server: '104.16.1.1',
                 server_port: 443,
                 uuid: '11111111-2222-3333-4444-555555555555',
@@ -109,12 +109,12 @@ async function main() {
             {
                 type: 'selector',
                 tag: '✅ Selector',
-                outbounds: ['auto', 'BPB-VLESS-443-104.16.1.1']
+                outbounds: ['auto', 'Ref-VLESS-443-104.16.1.1']
             },
             {
                 type: 'urltest',
                 tag: 'auto',
-                outbounds: ['BPB-VLESS-443-104.16.1.1'],
+                outbounds: ['Ref-VLESS-443-104.16.1.1'],
                 url: 'http://www.gstatic.com/generate_204',
                 interval: '5m',
                 tolerance: 50
@@ -184,10 +184,10 @@ async function main() {
             final: '✅ Selector'
         }
     };
-    fs.writeFileSync(scratchDir + '/bpb_singbox.json', JSON.stringify(bpbSb, null, 2));
+    fs.writeFileSync(scratchDir + '/ref_singbox.json', JSON.stringify(refSb, null, 2));
 
-    // BPB Clash equivalent:
-    const bpbClashYaml = `port: 7892
+    // Reference Clash equivalent:
+    const refClashYaml = `port: 7892
 socks-port: 7893
 allow-lan: false
 mode: rule
@@ -227,7 +227,7 @@ sniffer:
       ports: [443, 8443, 2053, 2083, 2087, 2096]
 
 proxies:
-  - name: "BPB-VLESS-443-104.16.1.1"
+  - name: "Ref-VLESS-443-104.16.1.1"
     type: vless
     server: 104.16.1.1
     port: 443
@@ -251,7 +251,7 @@ proxy-groups:
     type: select
     proxies:
       - "AUTO"
-      - "BPB-VLESS-443-104.16.1.1"
+      - "Ref-VLESS-443-104.16.1.1"
 
   - name: "AUTO"
     type: url-test
@@ -259,7 +259,7 @@ proxy-groups:
     interval: 300
     tolerance: 50
     proxies:
-      - "BPB-VLESS-443-104.16.1.1"
+      - "Ref-VLESS-443-104.16.1.1"
 
 rule-providers:
   ir:
@@ -298,10 +298,10 @@ rules:
   - DOMAIN-SUFFIX,openai.com,DIRECT
   - MATCH,✅ Selector
 `;
-    fs.writeFileSync(scratchDir + '/bpb_clash.yaml', bpbClashYaml);
+    fs.writeFileSync(scratchDir + '/ref_clash.yaml', refClashYaml);
 
-    // BPB Xray equivalent:
-    const bpbXray = {
+    // Reference Xray equivalent:
+    const refXray = {
         log: { loglevel: 'warning' },
         dns: {
             hosts: {
@@ -345,7 +345,7 @@ rules:
         ],
         outbounds: [
             {
-                tag: 'BPB-VLESS-443-104.16.1.1',
+                tag: 'Ref-VLESS-443-104.16.1.1',
                 protocol: 'vless',
                 settings: {
                     vnext: [
@@ -371,7 +371,7 @@ rules:
             domainStrategy: 'IPIfNonMatch',
             rules: [
                 { type: 'field', inboundTag: ['dns-in'], outboundTag: 'dns-out' },
-                { type: 'field', inboundTag: ['remote-dns'], outboundTag: 'BPB-VLESS-443-104.16.1.1' },
+                { type: 'field', inboundTag: ['remote-dns'], outboundTag: 'Ref-VLESS-443-104.16.1.1' },
                 { type: 'field', inboundTag: ['dns'], outboundTag: 'direct' },
                 { type: 'field', outboundTag: 'direct', ip: ['geoip:private'] },
                 { type: 'field', network: 'udp', outboundTag: 'block' },
@@ -379,11 +379,11 @@ rules:
                 { type: 'field', outboundTag: 'direct', ip: ['geoip:private', 'geoip:ir'] },
                 { type: 'field', outboundTag: 'direct', domain: ['geosite:category-ir'] },
                 { type: 'field', outboundTag: 'direct', domain: ['geosite:openai', 'domain:openai.com', 'domain:chatgpt.com'] },
-                { type: 'field', network: 'tcp', outboundTag: 'BPB-VLESS-443-104.16.1.1' }
+                { type: 'field', network: 'tcp', outboundTag: 'Ref-VLESS-443-104.16.1.1' }
             ]
         }
     };
-    fs.writeFileSync(scratchDir + '/bpb_xray.json', JSON.stringify(bpbXray, null, 2));
+    fs.writeFileSync(scratchDir + '/ref_xray.json', JSON.stringify(refXray, null, 2));
 
     console.log('ALL_A_B_CONFIGS_GENERATED_SUCCESSFULLY');
 }

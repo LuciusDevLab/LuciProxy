@@ -1,7 +1,7 @@
 {
   "luciproxy_version": "1.2.0",
   "git_commit": "0b7cb450c47f795ffd2ecd09e70e7ce66e8853ec",
-  "artifact_sha256": "cb7c9803c8d945f2106122597e1d42ab96a1f1c31fa414d12717b18e724c015f",
+  "artifact_sha256": "06fefda1c8ccac907f690bf549fcfcf1138b827b4ae0abed6e31496a07026cef",
   "builder_version": "1.2.0",
   "build_timestamp": "2026-10-03T19:00:00Z",
   "compatibility_date": "2026-10-01",

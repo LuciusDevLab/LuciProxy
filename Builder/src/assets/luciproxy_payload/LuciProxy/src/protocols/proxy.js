@@ -14,14 +14,25 @@ import {
     activeConns,
     uuidUsage,
     trackUsage,
-    getEffectivePips
+    getEffectivePips,
+    getEffectiveOutboundRelays
 } from "../users/manager.js";
+import {
+    getEffectiveProxyIpPool,
+    isUserProxyIpOverrideActive,
+    isProxyIpEnabled,
+    parseProxyIpEntry,
+    selectDeterministicProxyIp,
+    normalizeProxyIp
+} from "../subscriptions/proxyip.js";
 import {
     TCP_OPEN_TIMEOUT_MS,
     UPSTREAM_WRITE_TIMEOUT_MS,
     DOWNSTREAM_READ_TIMEOUT_MS,
     UPSTREAM_QUEUE_MAX_BYTES,
-    UPSTREAM_QUEUE_MAX_ITEMS
+    UPSTREAM_QUEUE_MAX_ITEMS,
+    DEFAULT_NAT64_PREFIXES,
+    DEFAULT_BACKUP_RELAYS
 } from "../config.js";
 import {
     withDeadline,
@@ -29,7 +40,8 @@ import {
     decrementOpenWs,
     formatSocketHost,
     base64ToArrayBuffer,
-    convertToNAT64IPv6
+    convertToNAT64IPv6,
+    isCloudflareIp
 } from "../utils/helpers.js";
 import {
     resolveDomainDoh,
@@ -112,7 +124,7 @@ export async function processTelemetryStream(reqOrEnv, envOrCtx, ctxOrIdx, wsRel
     edgeSocket.accept();
     edgeSocket.binaryType = "arraybuffer";
 
-    startDataPipe(edgeSocket, env, ctx, relayIndex, sysConfig, earlyDataPayload);
+    startDataPipe(edgeSocket, env, ctx, relayIndex, sysConfig, earlyDataPayload, request);
 
     const upgradeHeaders = new Headers();
     if (earlyDataPayload && request?.headers?.has("sec-websocket-protocol")) {
@@ -129,7 +141,7 @@ export async function processTelemetryStream(reqOrEnv, envOrCtx, ctxOrIdx, wsRel
 /**
  * Initializes and drives the bidirectional stream between client WebSocket and remote TCP socket.
  */
-export async function startDataPipe(webSocket, env, ctx, relayIndex, sysConfig, earlyDataPayload = "") {
+export async function startDataPipe(webSocket, env, ctx, relayIndex, sysConfig, earlyDataPayload = "", request = null) {
     incrementOpenWs();
 
     let uploadedBytes = 0;
@@ -168,7 +180,7 @@ export async function startDataPipe(webSocket, env, ctx, relayIndex, sysConfig, 
     async function dispatchChunk(chunkBuffer) {
         if (isInitialPacket) {
             isInitialPacket = false;
-            const session = await parseAndConnect(chunkBuffer, relayIndex, sysConfig, env, ctx);
+            const session = await parseAndConnect(chunkBuffer, relayIndex, sysConfig, env, ctx, request);
             if (!session || session.hasError) {
                 try { webSocket.close(); } catch {}
                 return;
@@ -209,10 +221,47 @@ export async function startDataPipe(webSocket, env, ctx, relayIndex, sysConfig, 
                 uploadedBytes += session.firstChunk.byteLength || 0;
             }
 
-            // Begin reading downstream response packets from remote socket
-            pumpDownstream(remoteSocket, webSocket, (chunkSize) => {
-                downloadedBytes += chunkSize;
-            });
+            // Begin reading downstream response packets from remote socket with zero-data retry
+            const runPump = async (sock, canRetry = true) => {
+                let hasIncomingData = false;
+                try {
+                    await pumpDownstream(
+                        sock,
+                        webSocket,
+                        (chunkSize) => {
+                            hasIncomingData = true;
+                            downloadedBytes += chunkSize;
+                        },
+                        DOWNSTREAM_READ_TIMEOUT_MS,
+                        false
+                    );
+                } catch {}
+
+                if (!hasIncomingData && canRetry && webSocket.readyState === 1) {
+                    const fallbackSock = await connectFallbackSocket(
+                        session.connectProvider,
+                        session.resolvedDestination,
+                        session.destinationPort,
+                        session.matchingProfile,
+                        sysConfig,
+                        session.activeClientHash,
+                        request
+                    );
+                    if (fallbackSock) {
+                        try { sock?.close(); } catch {}
+                        remoteSocket = fallbackSock;
+                        socketWriter = remoteSocket?.writable?.getWriter();
+                        if (session.firstChunk && socketWriter) {
+                            await socketWriter.write(session.firstChunk);
+                        }
+                        return await runPump(remoteSocket, false);
+                    }
+                }
+
+                try { webSocket.close(); } catch {}
+            };
+
+            runPump(remoteSocket, true);
         } else if (isUdpDns) {
             const dnsAns = await forwardUdpDnsPacket(chunkBuffer, isVlessSession, sysConfig);
             if (dnsAns) {
@@ -267,7 +316,7 @@ export async function startDataPipe(webSocket, env, ctx, relayIndex, sysConfig, 
  * Pumps downstream packets from remote TCP socket readable stream into client WebSocket.
  * Enforces an inactivity deadline that resets on each chunk received.
  */
-export async function pumpDownstream(remoteSocket, clientWebSocket, onBytesTransferred, readTimeoutMs = DOWNSTREAM_READ_TIMEOUT_MS) {
+export async function pumpDownstream(remoteSocket, clientWebSocket, onBytesTransferred, readTimeoutMs = DOWNSTREAM_READ_TIMEOUT_MS, closeWebSocketOnEnd = true) {
     if (!remoteSocket?.readable) return;
     try {
         const socketReader = remoteSocket.readable.getReader();
@@ -303,14 +352,180 @@ export async function pumpDownstream(remoteSocket, clientWebSocket, onBytesTrans
     } catch {
         // Stream termination handled in finally
     } finally {
-        try { clientWebSocket.close(); } catch {}
+        if (closeWebSocketOnEnd) {
+            try { clientWebSocket.close(); } catch {}
+        }
+    }
+}
+
+/**
+ * Connects to an outbound socket via verified non-Cloudflare proxy IP relays or NAT64 translation.
+ * Ensures zero-data socket resets on direct Cloudflare connection seamlessly fall back.
+ */
+export async function connectFallbackSocket(connectProvider, destinationHost, destinationPort, matchingProfile, sysConfig, clientKey, request = null) {
+    if (!connectProvider) return null;
+    if (!isProxyIpEnabled(matchingProfile, sysConfig)) return null;
+
+    const isExplicitPrefixMode = sysConfig?.proxyIpMode === "prefix";
+    const isUserOverride = isUserProxyIpOverrideActive(matchingProfile);
+
+    // Extract reqProxyIp if specified in request URL query or pathname
+    let reqProxyIp = null;
+    if (request) {
+        try {
+            const reqUrl = new URL(request.url);
+            reqProxyIp = reqUrl.searchParams.get("proxyip");
+            if (!reqProxyIp) {
+                const m = reqUrl.pathname.match(/(?:proxyip=|\/proxyip\/)([^/&?]+)/i);
+                if (m) reqProxyIp = decodeURIComponent(m[1]);
+            }
+        } catch {}
+    }
+
+    // NAT64 IPv6 gateway helper (RFC 6052)
+    const tryNat64 = async () => {
+        let targetIpv4 = null;
+        if (/^(\d{1,3}\.){3}\d{1,3}$/.test(destinationHost)) {
+            targetIpv4 = destinationHost;
+        } else if (/^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/.test(destinationHost)) {
+            try {
+                const dohUrl = sysConfig?.customDns || "https://1.1.1.1/dns-query";
+                targetIpv4 = await resolveDomainDoh(destinationHost, dohUrl, "A");
+            } catch {}
+            if (!targetIpv4) {
+                try {
+                    targetIpv4 = await resolveDomainDoh(destinationHost, "https://8.8.8.8/dns-query", "A");
+                } catch {}
+            }
+        }
+
+        if (!targetIpv4) return null;
+
+        const candidatePrefixes = matchingProfile?.nat64
+            ? [matchingProfile.nat64]
+            : (sysConfig?.prefixes?.length ? sysConfig.prefixes : DEFAULT_NAT64_PREFIXES);
+
+        for (const prefix of candidatePrefixes) {
+            const nat64Literal = convertToNAT64IPv6(targetIpv4, prefix);
+            if (!nat64Literal) continue;
+            try {
+                const sock = connectProvider({
+                    hostname: formatSocketHost(nat64Literal),
+                    port: destinationPort || 443
+                });
+                await withDeadline(
+                    sock.opened,
+                    TCP_OPEN_TIMEOUT_MS,
+                    () => {
+                        try { sock?.close(); } catch {}
+                    },
+                    "nat64-connect"
+                );
+                return sock;
+            } catch {}
+        }
+        return null;
+    };
+
+    // Candidate dialing loop with deterministic starting offset and intra-pool failover
+    const tryCandidatePool = async (candidateList) => {
+        if (!candidateList || candidateList.length === 0) return null;
+
+        const colo = request?.cf?.colo || "";
+        let startIndex = 0;
+        if (colo || clientKey) {
+            const selected = selectDeterministicProxyIp(candidateList, { colo, clientId: clientKey, attempt: 0 });
+            const foundIdx = candidateList.findIndex((c) => {
+                const candStr = typeof c === "string" ? c : (c.formatted || "");
+                return candStr.toLowerCase() === (selected || "").toLowerCase();
+            });
+            if (foundIdx !== -1) startIndex = foundIdx;
+        }
+
+        for (let attempt = 0; attempt < candidateList.length; attempt++) {
+            const rawCand = candidateList[(startIndex + attempt) % candidateList.length];
+            const parsed = typeof rawCand === "object" && rawCand !== null
+                ? rawCand
+                : parseProxyIpEntry(String(rawCand));
+            if (!parsed) continue;
+
+            if (isCloudflareIp(parsed.host)) continue;
+
+            const targetPort = parsed.port || destinationPort || 443;
+            try {
+                const sock = connectProvider({
+                    hostname: formatSocketHost(parsed.host),
+                    port: targetPort
+                });
+                await withDeadline(
+                    sock.opened,
+                    TCP_OPEN_TIMEOUT_MS,
+                    () => {
+                        try { sock?.close(); } catch {}
+                    },
+                    "proxyip-connect"
+                );
+                return sock;
+            } catch {
+                continue;
+            }
+        }
+        return null;
+    };
+
+    // Precedence Branch 1: User override is active
+    if (isUserOverride) {
+        let userPool = getEffectiveProxyIpPool(matchingProfile, sysConfig);
+        if (reqProxyIp) {
+            const norm = normalizeProxyIp(reqProxyIp);
+            if (norm && userPool.some((e) => e.toLowerCase() === norm.toLowerCase())) {
+                userPool = [norm, ...userPool.filter((e) => e.toLowerCase() !== norm.toLowerCase())];
+            }
+        }
+        // Use ONLY user pool; NEVER fall back to built-in pool or NAT64
+        return await tryCandidatePool(userPool);
+    }
+
+    // Precedence Branch 2: Operator backup relays configured (Phase H / sysConfig)
+    const opRelays = getEffectiveOutboundRelays(matchingProfile, sysConfig);
+    if (opRelays.length > 0) {
+        const sock = await tryCandidatePool(opRelays);
+        if (sock) return sock;
+    }
+
+    // Precedence Branch 3: Requested proxyip in URL
+    if (reqProxyIp) {
+        let pool = getEffectiveProxyIpPool(matchingProfile, sysConfig);
+        const norm = normalizeProxyIp(reqProxyIp);
+        if (norm) {
+            pool = [norm, ...pool.filter((e) => e.toLowerCase() !== norm.toLowerCase())];
+        }
+        const sock = await tryCandidatePool(pool);
+        if (sock) return sock;
+    }
+
+    // Precedence Branch 4: Fallback - NAT64 for IPv4, then proxy pool
+    if (isExplicitPrefixMode) {
+        const natSock = await tryNat64();
+        if (natSock) return natSock;
+        return await tryCandidatePool(getEffectiveProxyIpPool(matchingProfile, sysConfig));
+    } else {
+        const isIpv4Target = /^(\d{1,3}\.){3}\d{1,3}$/.test(destinationHost);
+        if (isIpv4Target) {
+            const natSock = await tryNat64();
+            if (natSock) return natSock;
+        }
+        const proxyPool = getEffectiveProxyIpPool(matchingProfile, sysConfig);
+        const sock = await tryCandidatePool(proxyPool);
+        if (sock) return sock;
+        return await tryNat64();
     }
 }
 
 /**
  * Parses VLESS or Trojan packet headers, authenticates subscriber, and initiates outbound connection.
  */
-export async function parseAndConnect(rawBuffer, relayIndex, sysConfig, env, ctx) {
+export async function parseAndConnect(rawBuffer, relayIndex, sysConfig, env, ctx, request = null) {
     const rawView = new Uint8Array(rawBuffer);
     let isVless = false;
     let destinationHost = "";
@@ -421,89 +636,51 @@ export async function parseAndConnect(rawBuffer, relayIndex, sysConfig, env, ctx
         } catch {}
     }
 
-    // 6. Outbound Connection: Direct Connect Attempt
-    try {
-        remoteSocket = connectProvider({
-            hostname: formatSocketHost(resolvedDestination),
-            port: destinationPort
-        });
-        await withDeadline(
-            remoteSocket.opened,
-            TCP_OPEN_TIMEOUT_MS,
-            () => {
-                try { remoteSocket?.close(); } catch {}
-            },
-            "direct-connect"
-        );
-    } catch {
-        // Direct connect failed -> Try NAT64 translation or proxy IP failover
-        let fallbackEstablished = false;
-
-        // Fallback A: RFC 6052 NAT64 IPv6 Translation
-        const natPrefix = matchingProfile.nat64 || sysConfig.nat64Prefix ||
-                          (sysConfig.proxyIpMode === "prefix" && sysConfig.prefixes?.[0]);
-        if (natPrefix && /^(\d{1,3}\.){3}\d{1,3}$/.test(resolvedDestination)) {
-            const nat64Literal = convertToNAT64IPv6(resolvedDestination, natPrefix);
-            if (nat64Literal) {
-                try {
-                    remoteSocket = connectProvider({
-                        hostname: formatSocketHost(nat64Literal),
-                        port: destinationPort
-                    });
-                    await withDeadline(
-                        remoteSocket.opened,
-                        TCP_OPEN_TIMEOUT_MS,
-                        () => {
-                            try { remoteSocket?.close(); } catch {}
-                        },
-                        "nat64-connect"
-                    );
-                    fallbackEstablished = true;
-                } catch {}
+    // 6. Outbound Connection: Direct Connect Attempt or Proxy IP routing
+    const proxyIpEnabled = isProxyIpEnabled(matchingProfile, sysConfig);
+    let reqProxyIp = null;
+    if (proxyIpEnabled && request) {
+        try {
+            const reqUrl = new URL(request.url);
+            reqProxyIp = reqUrl.searchParams.get("proxyip");
+            if (!reqProxyIp) {
+                const m = reqUrl.pathname.match(/(?:proxyip=|\/proxyip\/)([^/&?]+)/i);
+                if (m) reqProxyIp = decodeURIComponent(m[1]);
             }
+        } catch {}
+    }
+
+    const isCfTarget = isCloudflareIp(resolvedDestination);
+    const needsProxyRouting = proxyIpEnabled && isCfTarget;
+
+    if (needsProxyRouting) {
+        remoteSocket = await connectFallbackSocket(connectProvider, resolvedDestination, destinationPort, matchingProfile, sysConfig, clientKey, request);
+        if (!remoteSocket) {
+            return { hasError: true, message: "Outbound proxy IP connection failed across all candidates" };
         }
-
-        // Fallback B: Multi-Relay Proxy IP Failover
-        if (!fallbackEstablished) {
-            const relayEndpoints = getEffectivePips(matchingProfile, sysConfig);
-            if (relayEndpoints.length === 0) {
-                return { hasError: true, message: "Direct connect and fallback relays unavailable" };
-            }
-
-            // Profile-based hash to preserve consistent relay assignment
-            let userHash = 0;
-            for (let i = 0; i < clientKey.length; i++) {
-                userHash = clientKey.charCodeAt(i) + ((userHash << 5) - userHash);
-            }
-            const startIndex = Math.abs(userHash) % relayEndpoints.length;
-
-            for (let attempt = 0; attempt < Math.min(relayEndpoints.length, 3); attempt++) {
-                const targetRelay = relayEndpoints[(startIndex + attempt) % relayEndpoints.length];
-                try {
-                    const [relayHost, relayPortRaw] = targetRelay.split(":");
-                    const relayPort = relayPortRaw ? parseInt(relayPortRaw.split("#")[0], 10) : destinationPort;
-                    remoteSocket = connectProvider({
-                        hostname: formatSocketHost(relayHost),
-                        port: relayPort
-                    });
-                    await withDeadline(
-                        remoteSocket.opened,
-                        TCP_OPEN_TIMEOUT_MS,
-                        () => {
-                            try { remoteSocket?.close(); } catch {}
-                        },
-                        "relay-connect"
-                    );
-                    fallbackEstablished = true;
-                    break;
-                } catch {
-                    continue;
+    } else {
+        try {
+            remoteSocket = connectProvider({
+                hostname: formatSocketHost(resolvedDestination),
+                port: destinationPort
+            });
+            await withDeadline(
+                remoteSocket.opened,
+                TCP_OPEN_TIMEOUT_MS,
+                () => {
+                    try { remoteSocket?.close(); } catch {}
+                },
+                "direct-connect"
+            );
+        } catch {
+            if (proxyIpEnabled) {
+                remoteSocket = await connectFallbackSocket(connectProvider, resolvedDestination, destinationPort, matchingProfile, sysConfig, clientKey, request);
+                if (!remoteSocket) {
+                    return { hasError: true, message: "Outbound socket connection failed across all attempts" };
                 }
+            } else {
+                return { hasError: true, message: "Direct outbound socket connection failed (Proxy IP is disabled)" };
             }
-        }
-
-        if (!fallbackEstablished) {
-            return { hasError: true, message: "Outbound socket connection failed across all attempts" };
         }
     }
 
@@ -515,6 +692,10 @@ export async function parseAndConnect(rawBuffer, relayIndex, sysConfig, env, ctx
         activeClientHash: clientKey,
         remoteSocket,
         firstChunk,
+        resolvedDestination,
+        destinationPort,
+        matchingProfile,
+        connectProvider,
     };
 }
 

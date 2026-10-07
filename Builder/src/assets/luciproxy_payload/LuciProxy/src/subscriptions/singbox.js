@@ -5,183 +5,101 @@
  * Independent implementation authored specifically for LuciProxy.
  */
 
-import {
-    getAllProfiles,
-    getProfileHostNames,
-    getEffectivePips,
-    getCleanIpsWithNames,
-    calcEffectiveIps
-} from "../users/manager.js";
-import { getTransportParams } from "../utils/helpers.js";
-import { getConfigName, getFakeConfigNames } from "./tags.js";
+import { getFakeConfigNames } from "./tags.js";
 import { resolveNetworkPolicy } from "./policy.js";
 import { buildSingBoxRules } from "./routing.js";
+import { getResolvedEndpointPopulation } from "./population.js";
 
-export async function buildSingBoxJsonProfile(hostName, targetSub = null, allowInsecure = false, sysConfig) {
-    const ports = sysConfig.socketPorts
-        ? sysConfig.socketPorts
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean)
-        : ["443"];
-    const reqPath = encodeURI(`/${sysConfig.apiRoute}`);
-
-    const policy = resolveNetworkPolicy(sysConfig, "select");
+export async function buildSingBoxJsonProfile(hostName, targetSub = null, allowInsecure = false, sysConfig = {}, runtimeOverrides = {}) {
+    const policy = resolveNetworkPolicy(sysConfig, "select", runtimeOverrides.alpn);
     const dnsPolicy = policy.dns;
 
     const outboundsArr = [];
     const proxyTags = [];
     const fakeTags = [];
-    const nameCounts = {};
-
-    const getUniqueName = (baseName) => {
-        if (!nameCounts[baseName]) {
-            nameCounts[baseName] = 1;
-            return baseName;
-        }
-        let counter = nameCounts[baseName];
-        let newName = `${baseName}-${counter}`;
-        while (nameCounts[newName]) {
-            counter++;
-            newName = `${baseName}-${counter}`;
-        }
-        nameCounts[baseName] = counter + 1;
-        nameCounts[newName] = 1;
-        return newName;
-    };
 
     // 1. Add fake config informational nodes
     const fakeNames = getFakeConfigNames(sysConfig, targetSub);
     fakeNames.forEach((name) => {
-        const uName = getUniqueName(name);
         outboundsArr.push({
             type: "direct",
-            tag: uName,
+            tag: name,
         });
-        fakeTags.push(uName);
+        fakeTags.push(name);
     });
 
-    // 2. Iterate profiles
-    const profiles = getAllProfiles(sysConfig, targetSub);
-    profiles.forEach((p) => {
-        const pips = getEffectivePips(p, sysConfig);
-        const effectiveMode = p.userMode || sysConfig.mode;
-        const effectivePorts = p.userPorts
-            ? p.userPorts
-                  .split(",")
-                  .map((s) => s.trim())
-                  .filter(Boolean)
-            : ports;
-        const maxCfg = p.maxConfigs || null;
-        const profileHostNames = getProfileHostNames(hostName, p);
+    // 2. Resolve canonical endpoint population
+    const population = getResolvedEndpointPopulation(hostName, targetSub, allowInsecure, sysConfig, runtimeOverrides);
 
-        let configIndex = 0;
-
-        profileHostNames.forEach((hName) => {
-            const rawEntries = getCleanIpsWithNames(hName, p.cleanIp, sysConfig);
-            const hasPrimary = rawEntries.some((e) => e.ip.toLowerCase() === hName.toLowerCase());
-            const ipEntries = hasPrimary ? [...rawEntries] : [...rawEntries, { ip: hName, name: "" }];
-            const allIps = ipEntries.map((e) => e.ip);
-            const ips = calcEffectiveIps(allIps, maxCfg, effectiveMode, effectivePorts, pips.length);
-
-            const ipNameMap = {};
-            ipEntries.forEach((e) => {
-                ipNameMap[e.ip] = e.name;
-            });
-
-            effectivePorts.forEach((port) => {
-                const isTls = getTransportParams(port) === "tls";
-                const portNum = parseInt(port, 10);
-
-                ips.forEach((ip) => {
-                    const _pips = pips.length > 0 ? pips : [null];
-                    _pips.forEach((selectedProxyIp) => {
-                        const ipName = ipNameMap[ip] || "";
-
-                        // VLESS Outbound
-                        if (effectiveMode === "alpha" || effectiveMode === "both") {
-                            const vName = getUniqueName(
-                                getConfigName("alpha", p.name, port, hName, ip, selectedProxyIp, configIndex, ipName, sysConfig)
-                            );
-                            outboundsArr.push({
-                                type: "vless",
-                                tag: vName,
-                                server: ip,
-                                server_port: portNum,
-                                uuid: p.id,
-                                packet_encoding: "",
-                                domain_resolver: "dns-direct",
-                                tls: {
-                                    enabled: isTls,
-                                    server_name: hName,
-                                    insecure: allowInsecure,
-                                    utls: {
-                                        enabled: true,
-                                        fingerprint: sysConfig.agent || "chrome",
-                                    },
-                                    ...(sysConfig.enableECH ? {
-                                        ech: {
-                                            enabled: true,
-                                            pq_signature_schemes_enabled: true,
-                                            dynamic_record_sizing_disabled: false,
-                                        }
-                                    } : {}),
-                                },
-                                transport: {
-                                    type: "ws",
-                                    path: reqPath,
-                                    headers: { Host: hName },
-                                    early_data_header_name: "Sec-WebSocket-Protocol",
-                                    max_early_data: 2560,
-                                },
-                            });
-                            proxyTags.push(vName);
-                            configIndex++;
+    population.forEach((item) => {
+        if (item.protocol === "alpha") {
+            outboundsArr.push({
+                type: "vless",
+                tag: item.tag,
+                server: item.server,
+                server_port: item.port,
+                uuid: item.uuid,
+                packet_encoding: "",
+                domain_resolver: "dns-direct",
+                tls: {
+                    enabled: item.isTls,
+                    server_name: item.sni,
+                    insecure: item.allowInsecure,
+                    ...(item.alpn ? { alpn: item.alpn } : {}),
+                    utls: {
+                        enabled: true,
+                        fingerprint: item.fingerprint,
+                    },
+                    ...(sysConfig.enableECH ? {
+                        ech: {
+                            enabled: true,
+                            pq_signature_schemes_enabled: true,
+                            dynamic_record_sizing_disabled: false,
                         }
-
-                        // Trojan Outbound
-                        if (effectiveMode === "beta" || effectiveMode === "both") {
-                            const tName = getUniqueName(
-                                getConfigName("beta", p.name, port, hName, ip, selectedProxyIp, configIndex, ipName, sysConfig)
-                            );
-                            outboundsArr.push({
-                                type: "trojan",
-                                tag: tName,
-                                server: ip,
-                                server_port: portNum,
-                                password: p.id,
-                                domain_resolver: "dns-direct",
-                                tls: {
-                                    enabled: isTls,
-                                    server_name: hName,
-                                    insecure: allowInsecure,
-                                    utls: {
-                                        enabled: true,
-                                        fingerprint: sysConfig.agent || "chrome",
-                                    },
-                                    ...(sysConfig.enableECH ? {
-                                        ech: {
-                                            enabled: true,
-                                            pq_signature_schemes_enabled: true,
-                                            dynamic_record_sizing_disabled: false,
-                                        }
-                                    } : {}),
-                                },
-                                transport: {
-                                    type: "ws",
-                                    path: reqPath,
-                                    headers: { Host: hName },
-                                    early_data_header_name: "Sec-WebSocket-Protocol",
-                                    max_early_data: 2560,
-                                },
-                            });
-                            proxyTags.push(tName);
-                            configIndex++;
-                        }
-                    });
-                });
+                    } : {}),
+                },
+                transport: {
+                    type: "ws",
+                    path: item.path,
+                    headers: { Host: item.host },
+                    early_data_header_name: "Sec-WebSocket-Protocol",
+                    max_early_data: 2560,
+                },
             });
-        });
+            proxyTags.push(item.tag);
+        } else if (item.protocol === "beta") {
+            outboundsArr.push({
+                type: "trojan",
+                tag: item.tag,
+                server: item.server,
+                server_port: item.port,
+                password: item.password,
+                domain_resolver: "dns-direct",
+                tls: {
+                    enabled: item.isTls,
+                    server_name: item.sni,
+                    insecure: item.allowInsecure,
+                    ...(item.alpn ? { alpn: item.alpn } : {}),
+                    utls: {
+                        enabled: true,
+                        fingerprint: item.fingerprint,
+                    },
+                    ...(sysConfig.enableECH ? {
+                        ech: {
+                            enabled: true,
+                        }
+                    } : {}),
+                },
+                transport: {
+                    type: "ws",
+                    path: item.path,
+                    headers: { Host: item.host },
+                    early_data_header_name: "Sec-WebSocket-Protocol",
+                    max_early_data: 2560,
+                },
+            });
+            proxyTags.push(item.tag);
+        }
     });
 
     const selectorGroup = {
@@ -345,4 +263,3 @@ export function applySingBoxFragment(configObj) {
     }
     return configObj;
 }
-

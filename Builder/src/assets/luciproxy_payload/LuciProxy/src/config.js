@@ -5,7 +5,26 @@
  * Independent implementation authored specifically for LuciProxy.
  */
 
-export const CURRENT_VERSION = "1.2.0";
+export const CURRENT_VERSION = "1.2.1";
+
+export const DEFAULT_NAT64_PREFIXES = [
+    "[2a02:898:146:64::]",
+    "[2602:fc59:b0:64::]",
+    "[2602:fc59:11:64::]"
+];
+
+// Default external backup relays. LuciProxy is independent and does not depend on unconfigured third-party relays.
+// Operators can optionally configure custom relays via system config or per-user profiles.
+// Fallback defaults to standard RFC 6052 NAT64 IPv6 gateways.
+export const DEFAULT_BACKUP_RELAYS = [];
+
+// Approved built-in default Proxy IP pool for LuciProxy
+export const DEFAULT_PROXY_IP_POOL = [
+    "proxyip.fxxk.dedyn.io",
+    "workers.cloudflare.cyou",
+    "proxyip.jp.fxxk.dedyn.io",
+    "proxyip.sg.fxxk.dedyn.io"
+];
 
 export const DEFAULT_ECH_CONFIGS = [
     "cloudflare-ech.com+udp://1.1.1.1",
@@ -76,6 +95,9 @@ export const SYSTEM_DEFAULTS = {
     maintenanceHost: "https://www.ubuntu.com, https://www.docker.com",
     backupRelay: "",
     customRelay: "",
+    enableProxyIp: true,
+    proxyIpMode: "builtin", // "builtin" | "custom"
+    proxyIpPool: [...DEFAULT_PROXY_IP_POOL],
     masterKey: "",
     metricNode: "time.is",
     cleanIps: "",
@@ -83,6 +105,7 @@ export const SYSTEM_DEFAULTS = {
     deviceId: "",
     mode: "alpha", // "alpha" = vless, "beta" = trojan, "both" = dual protocol
     agent: "chrome",
+    alpn: "", // Canonical ALPN policy (unset/auto = "", or explicit e.g. "http/1.1", "h2")
     socketPorts: "443",
     customDns: "https://8.8.8.8/dns-query",
     resolveIp: "8.8.8.8",

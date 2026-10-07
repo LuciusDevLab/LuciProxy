@@ -504,6 +504,12 @@
                     </div>
 
                     <div class="form-group">
+                        <label class="form-label">Application-Layer Protocol Negotiation (ALPN)</label>
+                        <input type="text" id="cfg-alpn" class="input" placeholder="e.g. http/1.1 or h2,http/1.1 (leave empty for auto/default)">
+                        <span style="color:var(--text-muted); font-size:0.75rem;">TLS ALPN list for proxy endpoints. Leave blank for client default, or specify comma-separated tokens like <code>http/1.1</code> or <code>h2,http/1.1</code>.</span>
+                    </div>
+
+                    <div class="form-group">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                             <label class="form-label" style="margin-bottom:0;">Global ECH Configurations (<span id="cfg-ech-count">60</span> active)</label>
                             <div style="display:flex; gap:6px;">
@@ -513,6 +519,52 @@
                         </div>
                         <textarea id="cfg-ech-list" class="textarea" rows="6" placeholder="domain+udp://ip (one per line)" oninput="updateGlobalEchCount()"></textarea>
                         <small style="color:var(--text-muted); font-size:0.75rem;">Configurable echConfigList. Each base subscription multiplies across each active ECH entry (&amp;ech=...).</small>
+                    </div>
+
+                    <div class="card" style="margin-top: 20px; border-color: var(--accent); background: rgba(56, 189, 248, 0.03);">
+                        <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+                            <span>Proxy IP Manager</span>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem; font-weight:normal; cursor:pointer;">
+                                    <input type="checkbox" id="cfg-enable-proxyip" checked onchange="toggleProxyIpEnabled()">
+                                    Enable Proxy IP Routing
+                                </label>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 12px;">
+                            <label class="form-label">Operating Mode</label>
+                            <div style="display:flex; gap:20px; font-size:0.88rem;">
+                                <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                                    <input type="radio" name="cfg-proxyip-mode" id="proxyip-mode-builtin" value="builtin" checked onchange="onProxyIpModeChange()">
+                                    Automatic (Built-in Pool)
+                                </label>
+                                <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                                    <input type="radio" name="cfg-proxyip-mode" id="proxyip-mode-custom" value="custom" onchange="onProxyIpModeChange()">
+                                    Custom Operator Pool
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <label class="form-label" style="margin-bottom:0;" id="cfg-proxyip-pool-label">Active Proxy IP Pool (4 Built-in Endpoints)</label>
+                                <div style="display:flex; gap:6px;">
+                                    <button type="button" class="btn btn-sm" onclick="probeEntireProxyPool()">Check Latency</button>
+                                    <button type="button" class="btn btn-sm btn-secondary" id="btn-add-proxyip" style="display:none;" onclick="addProxyIpPrompt()">+ Add Entry</button>
+                                    <button type="button" class="btn btn-sm btn-secondary" onclick="restoreDefaultProxyIpPool()">Restore Defaults</button>
+                                </div>
+                            </div>
+                            <textarea id="cfg-proxyip-pool" class="textarea" rows="4" placeholder="workers.cloudflare.cyou&#10;proxyip.fxxk.dedyn.io" style="font-family:monospace; font-size:0.82rem;"></textarea>
+                            <div id="proxyip-pool-status" style="margin-top:6px; font-size:0.78rem; color:var(--text-muted);">
+                                Status: Automatic mode active. Using approved clean-room default pool.
+                            </div>
+                        </div>
+
+                        <div id="proxyip-probe-results" style="display:none; margin-top:12px; background:var(--bg-input); padding:10px; border-radius:var(--radius-md); border:1px solid var(--border-color); font-size:0.82rem;">
+                            <div style="font-weight:600; margin-bottom:6px; color:var(--text-main);">Pool Connectivity &amp; Latency Results:</div>
+                            <div id="proxyip-probe-list" style="display:flex; flex-direction:column; gap:4px;"></div>
+                        </div>
                     </div>
 
                     <div style="display: flex; gap: 12px; margin-top: 20px;">
@@ -575,6 +627,10 @@
                     <input type="text" id="form-user-final-mask" class="input" placeholder="Leave empty to inherit global setting">
                 </div>
                 <div class="form-group">
+                    <label class="form-label">ALPN Override (e.g. http/1.1 or h2,http/1.1, optional)</label>
+                    <input type="text" id="form-user-alpn" class="input" placeholder="Leave empty to inherit global setting">
+                </div>
+                <div class="form-group">
                     <label class="form-label">ECH Configuration</label>
                     <div style="display:flex; gap:16px; margin-bottom:8px; font-size:0.85rem;">
                         <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
@@ -596,6 +652,26 @@
                         </div>
                         <textarea id="form-user-ech-list" class="textarea" rows="4" placeholder="domain+udp://ip (one per line)" oninput="updateSubscriberConfigPreview()"></textarea>
                     </div>
+                </div>
+                <div class="form-group" style="margin-top:14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <label class="form-label" style="margin-bottom:0;">Proxy IP Configuration</label>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <label style="display:flex; align-items:center; gap:5px; font-size:0.8rem; font-weight:normal; cursor:pointer;">
+                                <input type="checkbox" id="form-user-enable-proxyip" checked onchange="updateUserProxyIpNotice()">
+                                <span>Enable Proxy IP</span>
+                            </label>
+                            <button type="button" class="btn btn-sm btn-secondary" style="padding:2px 8px; font-size:0.75rem;" onclick="clearUserProxyIpOverride()">Clear (Restore Default)</button>
+                        </div>
+                    </div>
+                    <textarea id="form-user-proxy-ip" class="textarea" rows="2" placeholder="e.g. 1.2.3.4:443&#10;example.com:443&#10;[2606:4700::1]:443" oninput="updateUserProxyIpNotice()"></textarea>
+                    <div id="form-user-proxy-ip-notice" style="margin-top:6px; font-size:0.78rem; color:var(--text-muted); display:flex; align-items:center; gap:6px;">
+                        <span id="user-pip-notice-icon">ℹ️</span>
+                        <span id="user-pip-notice-text">Inheriting active Proxy IP pool (Automatic/Custom).</span>
+                    </div>
+                    <small style="color:var(--text-muted); font-size:0.72rem; display:block; margin-top:4px;">
+                        Examples: <code>1.2.3.4:443</code>, <code>example.com:443</code>, <code>[2606:4700::1]:443</code>. Multiline or comma-separated.
+                    </small>
                 </div>
                 <div id="form-user-calc-preview" style="background:var(--bg-input); padding:10px; border-radius:var(--radius-md); border:1px solid var(--border-color); margin-top:12px; font-size:0.82rem; color:var(--text-main);">
                     <span style="font-weight:600; color:var(--accent);">Config Multiplier:</span>
@@ -743,6 +819,153 @@
             const targetEl = document.getElementById('form-user-ech-list');
             if (targetEl) targetEl.value = DEFAULT_ECH_CONFIGS.join('\n');
             updateSubscriberConfigPreview();
+        }
+
+        const DEFAULT_BUILTIN_PROXY_IPS = [
+            "proxyip.fxxk.dedyn.io",
+            "workers.cloudflare.cyou",
+            "proxyip.jp.fxxk.dedyn.io",
+            "proxyip.sg.fxxk.dedyn.io"
+        ];
+
+        function onProxyIpModeChange() {
+            const isCustom = document.getElementById('proxyip-mode-custom')?.checked;
+            const poolTextarea = document.getElementById('cfg-proxyip-pool');
+            const statusEl = document.getElementById('proxyip-pool-status');
+            const labelEl = document.getElementById('cfg-proxyip-pool-label');
+            const addBtn = document.getElementById('btn-add-proxyip');
+
+            if (isCustom) {
+                if (labelEl) labelEl.textContent = 'Active Proxy IP Pool (Custom Operator List)';
+                if (statusEl) statusEl.innerHTML = '<span style="color:var(--accent); font-weight:600;">Custom Mode Active:</span> Built-in pool entries are NOT used. Subscribers will route exclusively through this custom list.';
+                if (addBtn) addBtn.style.display = 'inline-block';
+            } else {
+                if (labelEl) labelEl.textContent = 'Active Proxy IP Pool (4 Built-in Endpoints)';
+                if (statusEl) statusEl.innerHTML = 'Status: <span style="color:var(--text-main); font-weight:600;">Automatic Mode Active.</span> Using approved clean-room default pool.';
+                if (addBtn) addBtn.style.display = 'none';
+                if (poolTextarea && !poolTextarea.value.trim()) {
+                    poolTextarea.value = DEFAULT_BUILTIN_PROXY_IPS.join('\n');
+                }
+            }
+        }
+
+        function toggleProxyIpEnabled() {
+            const isEnabled = document.getElementById('cfg-enable-proxyip')?.checked;
+            const statusEl = document.getElementById('proxyip-pool-status');
+            if (!isEnabled && statusEl) {
+                statusEl.innerHTML = '<span style="color:#ef4444; font-weight:600;">Proxy IP Routing is DISABLED globally.</span> Direct/NAT64 egress active.';
+            } else {
+                onProxyIpModeChange();
+            }
+        }
+
+        function restoreDefaultProxyIpPool() {
+            const builtinRadio = document.getElementById('proxyip-mode-builtin');
+            if (builtinRadio) builtinRadio.checked = true;
+            const poolTextarea = document.getElementById('cfg-proxyip-pool');
+            if (poolTextarea) poolTextarea.value = DEFAULT_BUILTIN_PROXY_IPS.join('\n');
+            onProxyIpModeChange();
+        }
+
+        function addProxyIpPrompt() {
+            const entry = prompt('Enter new Proxy IP endpoint (e.g. 1.2.3.4:443, proxy.example.com, or [2606:4700::1]:443):');
+            if (!entry || !entry.trim()) return;
+            const customRadio = document.getElementById('proxyip-mode-custom');
+            if (customRadio) customRadio.checked = true;
+            onProxyIpModeChange();
+            const poolTextarea = document.getElementById('cfg-proxyip-pool');
+            if (poolTextarea) {
+                const current = poolTextarea.value.trim();
+                poolTextarea.value = current ? current + '\n' + entry.trim() : entry.trim();
+            }
+        }
+
+        async function probeEntireProxyPool() {
+            const resultsBox = document.getElementById('proxyip-probe-results');
+            const listEl = document.getElementById('proxyip-probe-list');
+            const poolText = (document.getElementById('cfg-proxyip-pool')?.value || '').trim();
+            const entries = poolText.split(/[\r\n,;]+/).map(s => s.trim()).filter(Boolean);
+
+            if (entries.length === 0) {
+                alert('No Proxy IP entries in the active pool to test.');
+                return;
+            }
+
+            if (resultsBox) resultsBox.style.display = 'block';
+            if (listEl) listEl.innerHTML = '<div style="color:var(--text-muted);">Testing pool endpoints...</div>';
+
+            const outputItems = [];
+            for (const item of entries) {
+                try {
+                    const res = await fetch(`/${state.apiRoute}/proxy-ip/test?target=${encodeURIComponent(item)}&attempts=3`, {
+                        headers: { 'Authorization': 'Bearer ' + state.masterKey }
+                    });
+                    const data = await res.json();
+                    const isOk = data.ok || data.success;
+                    const latency = data.latency_ms ? `${data.latency_ms}ms` : 'timeout';
+                    const badge = isOk ? '<span style="color:#22c55e;">● Reachable</span>' : '<span style="color:#ef4444;">● Offline</span>';
+                    outputItems.push(`
+                        <div style="display:flex; justify-content:space-between; align-items:center; padding:4px 8px; background:var(--bg-card); border-radius:4px; font-family:monospace;">
+                            <span>${item}</span>
+                            <div style="display:flex; gap:12px; align-items:center;">
+                                <span style="color:var(--text-muted);">${latency}</span>
+                                ${badge}
+                            </div>
+                        </div>
+                    `);
+                } catch (e) {
+                    outputItems.push(`
+                        <div style="display:flex; justify-content:space-between; align-items:center; padding:4px 8px; background:var(--bg-card); border-radius:4px; font-family:monospace;">
+                            <span>${item}</span>
+                            <span style="color:#ef4444;">● Error (${e.message})</span>
+                        </div>
+                    `);
+                }
+            }
+            if (listEl) listEl.innerHTML = outputItems.join('');
+        }
+
+        function updateUserProxyIpNotice() {
+            const isEnabled = document.getElementById('form-user-enable-proxyip')?.checked ?? true;
+            const textareaEl = document.getElementById('form-user-proxy-ip');
+            const val = (textareaEl?.value || '').trim();
+            const noticeEl = document.getElementById('form-user-proxy-ip-notice');
+            const iconEl = document.getElementById('user-pip-notice-icon');
+            const textEl = document.getElementById('user-pip-notice-text');
+
+            if (!isEnabled) {
+                if (textareaEl) {
+                    textareaEl.disabled = true;
+                    textareaEl.style.opacity = '0.5';
+                }
+                if (iconEl) iconEl.textContent = '🚫';
+                if (textEl) textEl.innerHTML = '<strong style="color:#ef4444;">Proxy IP is DISABLED for this subscriber (State 1).</strong> Node paths will omit &proxyip= and connections will route purely direct.';
+                if (noticeEl) noticeEl.style.color = '#ef4444';
+                return;
+            }
+
+            if (textareaEl) {
+                textareaEl.disabled = false;
+                textareaEl.style.opacity = '1';
+            }
+
+            if (val) {
+                if (iconEl) iconEl.textContent = '⚠️';
+                if (textEl) textEl.innerHTML = '<strong style="color:var(--accent);">Custom Proxy IP active (State 3).</strong> This subscriber routes ONLY through these entries (never merged with built-in/operator pool).';
+                if (noticeEl) noticeEl.style.color = 'var(--text-main)';
+            } else {
+                if (iconEl) iconEl.textContent = 'ℹ️';
+                if (textEl) textEl.innerHTML = '<strong style="color:var(--text-main);">Automatic mode active (State 2).</strong> Resolving pool via canonical precedence (Operator Pool &gt; Built-in Pool).';
+                if (noticeEl) noticeEl.style.color = 'var(--text-muted)';
+            }
+        }
+
+        function clearUserProxyIpOverride() {
+            const el = document.getElementById('form-user-proxy-ip');
+            if (el) el.value = '';
+            const enableEl = document.getElementById('form-user-enable-proxyip');
+            if (enableEl) enableEl.checked = true;
+            updateUserProxyIpNotice();
         }
 
         function updateSubscriberConfigPreview() {
@@ -941,12 +1164,19 @@
             document.getElementById('user-edit-id').value = '';
             document.getElementById('form-user-clean-ip').value = 'www.speedtest.net';
             document.getElementById('form-user-final-mask').value = '';
+            const alpnEl = document.getElementById('form-user-alpn');
+            if (alpnEl) alpnEl.value = '';
             const inheritRadio = document.getElementById('ech-mode-inherit');
             if (inheritRadio) inheritRadio.checked = true;
             const customWrap = document.getElementById('form-user-ech-custom-wrap');
             if (customWrap) customWrap.classList.add('hidden');
             const echListEl = document.getElementById('form-user-ech-list');
             if (echListEl) echListEl.value = '';
+            const pipEl = document.getElementById('form-user-proxy-ip');
+            if (pipEl) pipEl.value = '';
+            const enPipEl = document.getElementById('form-user-enable-proxyip');
+            if (enPipEl) enPipEl.checked = true;
+            updateUserProxyIpNotice();
             updateSubscriberConfigPreview();
             document.getElementById('modal-user').classList.add('open');
         }
@@ -962,6 +1192,8 @@
             document.getElementById('form-user-expiry').value = user.expiryMs ? new Date(user.expiryMs).toISOString().split('T')[0] : '';
             document.getElementById('form-user-clean-ip').value = user.cleanIp || 'www.speedtest.net';
             document.getElementById('form-user-final-mask').value = user.finalMask || '';
+            const alpnEl = document.getElementById('form-user-alpn');
+            if (alpnEl) alpnEl.value = user.alpn || '';
 
             const customRadio = document.getElementById('ech-mode-custom');
             const inheritRadio = document.getElementById('ech-mode-inherit');
@@ -977,6 +1209,12 @@
                 if (customWrap) customWrap.classList.add('hidden');
                 if (echListEl) echListEl.value = '';
             }
+
+            const enPipEl = document.getElementById('form-user-enable-proxyip');
+            if (enPipEl) enPipEl.checked = user.enableProxyIp !== false;
+            const pipEl = document.getElementById('form-user-proxy-ip');
+            if (pipEl) pipEl.value = user.proxyIp || '';
+            updateUserProxyIpNotice();
 
             updateSubscriberConfigPreview();
             document.getElementById('modal-user').classList.add('open');
@@ -994,6 +1232,9 @@
             const expiryStr = document.getElementById('form-user-expiry').value;
             const cleanIp = document.getElementById('form-user-clean-ip').value.trim() || 'www.speedtest.net';
             const finalMask = document.getElementById('form-user-final-mask').value.trim();
+            const alpn = (document.getElementById('form-user-alpn')?.value || '').trim();
+            const enableProxyIp = document.getElementById('form-user-enable-proxyip')?.checked ?? true;
+            const proxyIp = (document.getElementById('form-user-proxy-ip')?.value || '').trim();
 
             const isCustomEch = document.getElementById('ech-mode-custom')?.checked;
             const echConfigList = isCustomEch
@@ -1009,7 +1250,10 @@
                 expiryMs,
                 cleanIp,
                 finalMask,
+                alpn: alpn || undefined,
                 echConfigList,
+                enableProxyIp,
+                proxyIp,
             };
 
             const method = editId ? 'PUT' : 'POST';
@@ -1111,6 +1355,8 @@
             document.getElementById('cfg-custom-dns').value = cfg.customDns || 'https://cloudflare-dns.com/dns-query';
             document.getElementById('cfg-clean-ips').value = cfg.cleanIps || '';
             document.getElementById('cfg-backup-relay').value = cfg.backupRelay || cfg.customRelay || '';
+            const alpnEl = document.getElementById('cfg-alpn');
+            if (alpnEl) alpnEl.value = cfg.alpn || '';
             const finalMaskEl = document.getElementById('cfg-final-mask');
             if (finalMaskEl) finalMaskEl.value = cfg.finalMask || '';
             const echListEl = document.getElementById('cfg-ech-list');
@@ -1119,6 +1365,30 @@
                 echListEl.value = echList.join('\n');
                 updateGlobalEchCount();
             }
+
+            if (cfg.enableProxyIp !== undefined) {
+                const enEl = document.getElementById('cfg-enable-proxyip');
+                if (enEl) enEl.checked = Boolean(cfg.enableProxyIp);
+            }
+            const mode = cfg.proxyIpMode || 'builtin';
+            if (mode === 'custom') {
+                const customR = document.getElementById('proxyip-mode-custom');
+                if (customR) customR.checked = true;
+            } else {
+                const builtinR = document.getElementById('proxyip-mode-builtin');
+                if (builtinR) builtinR.checked = true;
+            }
+            const poolEl = document.getElementById('cfg-proxyip-pool');
+            if (poolEl) {
+                if (Array.isArray(cfg.proxyIpPool) && cfg.proxyIpPool.length > 0) {
+                    poolEl.value = cfg.proxyIpPool.join('\n');
+                } else if (typeof cfg.proxyIpPool === 'string' && cfg.proxyIpPool.trim()) {
+                    poolEl.value = cfg.proxyIpPool.trim();
+                } else {
+                    poolEl.value = DEFAULT_BUILTIN_PROXY_IPS.join('\n');
+                }
+            }
+            onProxyIpModeChange();
         }
 
         document.getElementById('settings-form').addEventListener('submit', async (e) => {
@@ -1134,7 +1404,14 @@
                 customDns: document.getElementById('cfg-custom-dns').value.trim(),
                 cleanIps: document.getElementById('cfg-clean-ips').value.trim(),
                 backupRelay: document.getElementById('cfg-backup-relay').value.trim(),
+                alpn: (document.getElementById('cfg-alpn')?.value || '').trim(),
                 finalMask: (document.getElementById('cfg-final-mask')?.value || '').trim(),
+                enableProxyIp: document.getElementById('cfg-enable-proxyip')?.checked ?? true,
+                proxyIpMode: document.getElementById('proxyip-mode-custom')?.checked ? 'custom' : 'builtin',
+                proxyIpPool: (document.getElementById('cfg-proxyip-pool')?.value || '')
+                    .split(/[\r\n,;]+/)
+                    .map(s => s.trim())
+                    .filter(Boolean),
                 echConfigList: (document.getElementById('cfg-ech-list')?.value || '')
                     .split('\n')
                     .map(s => s.trim())

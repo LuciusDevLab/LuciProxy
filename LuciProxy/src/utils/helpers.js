@@ -202,3 +202,64 @@ export function convertToNAT64IPv6(ipv4Address, prefix) {
         return `[${cleanPrefix}:${hex[0]}${hex[1]}:${hex[2]}${hex[3]}]`;
     }
 }
+
+// Cloudflare Anycast CDN IPv4 CIDRs: [networkAddressInt, prefixLength]
+const CF_IPV4_CIDRS = [
+    [0x6715f400, 22], // 103.21.244.0/22
+    [0x6716c800, 22], // 103.22.200.0/22
+    [0x671f0400, 22], // 103.31.4.0/22
+    [0x68100000, 13], // 104.16.0.0/13
+    [0x68180000, 14], // 104.24.0.0/14
+    [0x6ca2c000, 18], // 108.162.192.0/18
+    [0x83004800, 22], // 131.0.72.0/22
+    [0x8d654000, 18], // 141.101.64.0/18
+    [0xa29e0000, 15], // 162.158.0.0/15
+    [0xac400000, 13], // 172.64.0.0/13
+    [0xadf53000, 20], // 173.245.48.0/20
+    [0xbc726000, 20], // 188.114.96.0/20
+    [0xbe5df000, 20], // 190.93.240.0/20
+    [0xc5eaf000, 22], // 197.234.240.0/22
+    [0xc6298000, 17], // 198.41.128.0/17
+    [0x01010100, 24], // 1.1.1.0/24
+    [0x01000000, 24]  // 1.0.0.0/24
+];
+
+/**
+ * Determines whether a given IP address belongs to Cloudflare's own anycast CDN network.
+ * Workers cannot establish outbound sockets directly to Cloudflare CDN IPs.
+ * @param {string} ipStr Hostname or IP address
+ * @returns {boolean} True if the address is within Cloudflare anycast ranges
+ */
+export function isCloudflareIp(ipStr) {
+    if (!ipStr || typeof ipStr !== "string") return false;
+    const clean = ipStr.replace(/^\[|\]$/g, "").trim().split(":")[0];
+    const parts = clean.split(".");
+    if (parts.length === 4) {
+        let num = 0;
+        for (let i = 0; i < 4; i++) {
+            const p = parseInt(parts[i], 10);
+            if (isNaN(p) || p < 0 || p > 255) return false;
+            num = (num << 8) | p;
+        }
+        num = num >>> 0;
+        for (const [net, maskLen] of CF_IPV4_CIDRS) {
+            const mask = maskLen === 0 ? 0 : (0xffffffff << (32 - maskLen)) >>> 0;
+            if ((num & mask) === (net & mask)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    const cleanV6 = ipStr.replace(/^\[|\]$/g, "").trim().toLowerCase();
+    if (cleanV6.includes(":")) {
+        return cleanV6.startsWith("2606:4700") ||
+               cleanV6.startsWith("2400:cb00") ||
+               cleanV6.startsWith("2803:f800") ||
+               cleanV6.startsWith("2405:b500") ||
+               cleanV6.startsWith("2405:8100") ||
+               cleanV6.startsWith("2a06:98c0") ||
+               cleanV6.startsWith("2c0f:f248");
+    }
+    return false;
+}
+

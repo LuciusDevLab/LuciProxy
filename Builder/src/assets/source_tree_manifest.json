@@ -1,9 +1,9 @@
 {
-  "luciproxy_version": "1.2.0",
-  "snapshot_timestamp": "2026-10-05T22:19:53Z",
-  "total_files": 53,
-  "total_bytes": 1284174,
-  "tree_sha256": "156c82e5004306c6978ddd5484cd9eb24bba37c5b86c5bd1874fdc8f5406ac66",
+  "luciproxy_version": "1.2.1",
+  "snapshot_timestamp": "2026-10-07T05:46:32Z",
+  "total_files": 57,
+  "total_bytes": 1424229,
+  "tree_sha256": "7c566d48bf0068e8a35fa766346f9b3c4ef11780a1b9a0c549fd7941f2907d57",
   "exclusions": [
     ".wrangler",
     ".wrangler/*",
@@ -33,8 +33,8 @@
     },
     {
       "path": "dist/index.js",
-      "sha256": "448b5dfb76f79c204a434e5ee74ea240d6048eeddcdc8c6397ee94e4f13fcd26",
-      "size_bytes": 289630
+      "sha256": "5455e42b6776577aa6c6436e436e3dba2c3266466673460aee2d5905ac389168",
+      "size_bytes": 326886
     },
     {
       "path": "dist/index.js.map",
@@ -43,7 +43,7 @@
     },
     {
       "path": "package.json",
-      "sha256": "6815ade6a0cae85a10ccacb84d35fd05e7b214ccd009e325841cd379f53f2be3",
+      "sha256": "442c6dfe698c0022874da6013ef31192da7ce7aba7b4a6b287e8e53398c621db",
       "size_bytes": 496
     },
     {
@@ -63,8 +63,8 @@
     },
     {
       "path": "src/assets/dashboard.html",
-      "sha256": "06bd2c5d43531181442064e06040cd40c2ceaffc987d5458b72df323ae01c3d5",
-      "size_bytes": 59609
+      "sha256": "c99d4f44638a1d85d3cc3d24b14aa12465242a5e63b667ac2309ee2d68775019",
+      "size_bytes": 77311
     },
     {
       "path": "src/assets/loaders.js",
@@ -78,8 +78,8 @@
     },
     {
       "path": "src/assets/templates.js",
-      "sha256": "f03cb157f37fd4d421373d00c15b2a9e34accfe00d50ab55e3ef45e18c92ee47",
-      "size_bytes": 95477
+      "sha256": "7271df0c6480b27e3172752e02429e16d148b226b5dfbbfd46479981c98e1a72",
+      "size_bytes": 119081
     },
     {
       "path": "src/auth/auth.js",
@@ -88,8 +88,8 @@
     },
     {
       "path": "src/config.js",
-      "sha256": "9077a157c71335e418828dce4bf9eb23d4a5c1e37a3f9b498292237f2d78a658",
-      "size_bytes": 6035
+      "sha256": "7ffe5c2d8ea6d2d027220621e7e48644adbcf3d6ec870802668bad89b9bf2599",
+      "size_bytes": 6909
     },
     {
       "path": "src/db/d1.js",
@@ -98,8 +98,8 @@
     },
     {
       "path": "src/index.js",
-      "sha256": "833713a58158126f9b344c2874da445bbb92fcd5bcaa873fbaf0a2bd8fafa06f",
-      "size_bytes": 22908
+      "sha256": "a125e9ba67d29c25f03b189daff26102df6766ed8f46cdce2032b6cbc1705610",
+      "size_bytes": 23124
     },
     {
       "path": "src/protocols/dns_resolver.js",
@@ -113,8 +113,8 @@
     },
     {
       "path": "src/protocols/proxy.js",
-      "sha256": "3c3cf737828456e0b15105c60b46574f0faca92e6f9e77a1134668744062f8f0",
-      "size_bytes": 27926
+      "sha256": "0a31800ff775f3e2b349d2f92418dba5c82d2d8c94bc570794ff73aea122490e",
+      "size_bytes": 35001
     },
     {
       "path": "src/protocols/trojan.js",
@@ -128,8 +128,8 @@
     },
     {
       "path": "src/subscriptions/clash.js",
-      "sha256": "3003241ef9abd4a8ede44462385be65f78660ec2a042991445ef08b319e21a80",
-      "size_bytes": 10341
+      "sha256": "08d989c3146ee0e7d295e0d4f184832197c48c8c93d4e1cd80ec5daad6813f69",
+      "size_bytes": 7388
     },
     {
       "path": "src/subscriptions/dns.js",
@@ -158,8 +158,18 @@
     },
     {
       "path": "src/subscriptions/policy.js",
-      "sha256": "085de29e69256fc8b57a916d89160e5cc3c8fb62207d113d672006377388b4f1",
-      "size_bytes": 1647
+      "sha256": "039e678fa929445ee816ff12790d1db3a1eedc2d943b2eda44603df44ec46964",
+      "size_bytes": 3951
+    },
+    {
+      "path": "src/subscriptions/population.js",
+      "sha256": "2366fdce094dd23602bdf7e2bf83bb9bc5d50b0349fb874039d35861caf6ebb9",
+      "size_bytes": 9237
+    },
+    {
+      "path": "src/subscriptions/proxyip.js",
+      "sha256": "e95c9d550c74d61a5482b2f6f6888020cc448d846f0b353af41b97ea9f420ada",
+      "size_bytes": 12665
     },
     {
       "path": "src/subscriptions/routing.js",
@@ -173,8 +183,8 @@
     },
     {
       "path": "src/subscriptions/singbox.js",
-      "sha256": "90538baea3874aebb6eb17df96fb738c909933bc211e7d30e5c80148092d1550",
-      "size_bytes": 13155
+      "sha256": "17ae5b5987d64a353f358480909f68dce5103f84eb78b4db1173068eb0e9783c",
+      "size_bytes": 9100
     },
     {
       "path": "src/subscriptions/tags.js",
@@ -183,13 +193,13 @@
     },
     {
       "path": "src/subscriptions/uri.js",
-      "sha256": "7dd7ae932de041d5a93e1bbbe4ab6d1406d6b468a77b474fa4dd60409b3f446e",
-      "size_bytes": 7491
+      "sha256": "9cd23ebd6c839aeca1d48793471ffcf4e76d222ec71c741f6152f8d6201978f8",
+      "size_bytes": 3742
     },
     {
       "path": "src/subscriptions/v2ray.js",
-      "sha256": "f6d79b5ec5223b623496b7117034662aecb04576d0d7b0585f87610efc8b6e69",
-      "size_bytes": 13518
+      "sha256": "a09a09ed30b8926191fc333b07149db478e9822d8af6858e2850c884a756a2bf",
+      "size_bytes": 10395
     },
     {
       "path": "src/subscriptions/wireguard.js",
@@ -198,8 +208,8 @@
     },
     {
       "path": "src/users/manager.js",
-      "sha256": "7adaae35eaa8f629d533927a32040341acf53b581eb218476f84a1a593073504",
-      "size_bytes": 26617
+      "sha256": "87d42f17f878f35ed54019ce60356038d4e8bbae50306efe277c79f44e84c568",
+      "size_bytes": 28360
     },
     {
       "path": "src/utils/crypto.js",
@@ -208,13 +218,18 @@
     },
     {
       "path": "src/utils/helpers.js",
-      "sha256": "c6383f4ac2bc7d8ee7ffd59261a609017b5d6f2a0641fe961cd4998c24bb5862",
-      "size_bytes": 6387
+      "sha256": "2301a0e6e7142935c0e685cd6ee14c7c8ae3f02118cb5344c1de3309d83b9ef4",
+      "size_bytes": 8683
     },
     {
       "path": "tests/ab_synthesizer.mjs",
-      "sha256": "c8f3bed4adbc7799afb65a2b1da4d215bf545dc358ce9177fa790bccbd29f760",
-      "size_bytes": 14029
+      "sha256": "8982e6d29c754c4a2ceb4f47aa43bd15229fa54bd3b1b676d34705b6f41a0ba3",
+      "size_bytes": 14444
+    },
+    {
+      "path": "tests/alpn_and_population_parity.test.js",
+      "sha256": "20a37adbba5c96ccbaf041def13dfa3c1dd04289ae7b2bf33e4eda23afcc849a",
+      "size_bytes": 17546
     },
     {
       "path": "tests/canonical_policy.test.js",
@@ -270,6 +285,11 @@
       "path": "tests/protocols.test.js",
       "sha256": "ae6565ed22aa3d5b59c57fab88ac4f54f0961975823da243523061dce385382a",
       "size_bytes": 23706
+    },
+    {
+      "path": "tests/proxyip_manager.test.js",
+      "sha256": "48c594c22c72cdca2752bfbf62b321255fa9ca139ce335a959044dbcccab70be",
+      "size_bytes": 21002
     },
     {
       "path": "tests/subscriptions.test.js",
