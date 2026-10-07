@@ -1,0 +1,8 @@
+{
+  "version": "2.0.0",
+  "release_tag": "manager-v2.0.0",
+  "repo_url": "https://github.com/LuciusDevLab/LuciProxy",
+  "release_url": "https://github.com/LuciusDevLab/LuciProxy/releases/tag/manager-v2.0.0",
+  "changelog": "v2.0.0: Initial release of LuciProxy Manager featuring dual native Windows and Android applications, multi-account token management, in-place Worker updates with D1 preservation, and real-time Cloudflare analytics.",
+  "released_at": "2026-10-07"
+}

@@ -48,6 +48,8 @@ Source-cods/
 *.spec
 Builder/dist/
 Builder/build/
+BuilderV2/dist/
+BuilderV2/build/
 
 # Scratch & Diagnostics
 scratch/
