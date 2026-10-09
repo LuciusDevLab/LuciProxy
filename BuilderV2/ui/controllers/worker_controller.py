@@ -65,6 +65,18 @@ class WorkerController:
             local_rec = local_workers.get(rw.name)
             installed_version = local_rec.installedWorkerVersion if local_rec else None
 
+            # Resolve latest worker release version for live comparison
+            try:
+                from ...spec.unified_version_checker import UnifiedVersionChecker, compare_versions
+                checker = UnifiedVersionChecker()
+                worker_info, _ = checker.fetch_worker_release()
+                latest_ver = worker_info.version if worker_info else None
+            except Exception:
+                latest_ver = None
+                compare_versions = lambda inst, avail: ("unknown", "Unknown", False)
+
+            v_status, v_label, has_update = compare_versions(installed_version, latest_ver)
+
             results.append({
                 "id": rw.id,
                 "name": rw.name,
@@ -73,7 +85,11 @@ class WorkerController:
                 "is_luciproxy": is_luciproxy,
                 "d1_bindings": discovered_d1,
                 "d1_display": d1_display,
-                "installed_version": installed_version or "Unrecorded",
+                "installed_version": installed_version or "Unknown",
+                "latest_version": latest_ver or "Unknown",
+                "version_status": v_status,
+                "version_status_label": v_label,
+                "has_update": has_update,
                 "tags": rw.tags,
             })
 
@@ -104,7 +120,6 @@ class WorkerController:
         worker_name: str,
         progress_callback: Optional[Callable[[int, int, str, str], None]] = None
     ) -> DeploymentResult:
-        """Updates an existing Worker in-place while strictly preserving its D1 database."""
         installer = WorkerInstaller(self.db, self.credential_store)
         return installer.update_worker(
             connection_id=connection_id,
@@ -112,4 +127,18 @@ class WorkerController:
             worker_name=worker_name,
             progress_callback=progress_callback
         )
+
+    def delete_worker(self, connection_id: str, account_id: str, worker_name: str) -> bool:
+        """
+        Deletes a Worker script from Cloudflare while strictly preserving its D1 database.
+        Cleans up local SQLite managed worker record if present.
+        """
+        token = self.credential_store.get_token(connection_id)
+        if not token:
+            raise ValueError(f"No token available for connection '{connection_id}'.")
+        cf_client = CloudflareClient(token=token, timeout=30)
+        cf_client.request("DELETE", f"/accounts/{account_id}/workers/scripts/{worker_name}", step="Delete Worker Script")
+        worker_id = f"{account_id}:{worker_name}"
+        self.db.delete_managed_worker(worker_id)
+        return True
 

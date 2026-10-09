@@ -196,6 +196,27 @@ class LocalDatabase:
             lastVerifiedAt=row["lastVerifiedAt"],
         )
 
+    def update_connection_status(
+        self,
+        connection_id: str,
+        status: str,
+        verified_at: Optional[str] = None
+    ) -> bool:
+        """Updates the status and optional lastVerifiedAt timestamp for a connection."""
+        conn = self._get_connection()
+        now = verified_at or (datetime.utcnow().isoformat() + "Z")
+        with conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE cloudflare_connections
+                SET status = ?, lastVerifiedAt = ?
+                WHERE connectionId = ?
+                """,
+                (status, now, connection_id),
+            )
+            return cursor.rowcount > 0
+
     def list_connections(self) -> List[ConnectionRecord]:
         """Lists all saved Cloudflare connections."""
         conn = self._get_connection()
@@ -320,9 +341,10 @@ class LocalDatabase:
                 INSERT INTO managed_workers (
                     workerId, connectionId, accountId, workerName, workerUrl,
                     d1BindingName, d1DatabaseId, d1Name, installedWorkerVersion,
+                    apiRoute,
                     lastWorkerUpdateCheck, latestDiscoveredWorkerVersion,
                     lastUpdatedAt, status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(workerId) DO UPDATE SET
                     workerName = excluded.workerName,
                     workerUrl = excluded.workerUrl,
@@ -330,6 +352,7 @@ class LocalDatabase:
                     d1DatabaseId = excluded.d1DatabaseId,
                     d1Name = excluded.d1Name,
                     installedWorkerVersion = excluded.installedWorkerVersion,
+                    apiRoute = excluded.apiRoute,
                     lastWorkerUpdateCheck = excluded.lastWorkerUpdateCheck,
                     latestDiscoveredWorkerVersion = excluded.latestDiscoveredWorkerVersion,
                     lastUpdatedAt = excluded.lastUpdatedAt,
@@ -345,6 +368,7 @@ class LocalDatabase:
                     worker.d1DatabaseId,
                     worker.d1Name,
                     worker.installedWorkerVersion,
+                    str(worker.apiRoute).strip() if isinstance(getattr(worker, "apiRoute", None), str) and worker.apiRoute.strip() else "sync",
                     worker.lastWorkerUpdateCheck,
                     worker.latestDiscoveredWorkerVersion,
                     now,
@@ -360,6 +384,7 @@ class LocalDatabase:
             """
             SELECT workerId, connectionId, accountId, workerName, workerUrl,
                    d1BindingName, d1DatabaseId, d1Name, installedWorkerVersion,
+                   apiRoute,
                    lastWorkerUpdateCheck, latestDiscoveredWorkerVersion,
                    lastUpdatedAt, status
             FROM managed_workers WHERE workerId = ?
@@ -379,6 +404,7 @@ class LocalDatabase:
             d1DatabaseId=row["d1DatabaseId"],
             d1Name=row["d1Name"],
             installedWorkerVersion=row["installedWorkerVersion"],
+            apiRoute=row["apiRoute"] if ("apiRoute" in row.keys() and row["apiRoute"]) else "sync",
             lastWorkerUpdateCheck=row["lastWorkerUpdateCheck"],
             latestDiscoveredWorkerVersion=row["latestDiscoveredWorkerVersion"],
             lastUpdatedAt=row["lastUpdatedAt"],
@@ -393,6 +419,7 @@ class LocalDatabase:
             """
             SELECT workerId, connectionId, accountId, workerName, workerUrl,
                    d1BindingName, d1DatabaseId, d1Name, installedWorkerVersion,
+                   apiRoute,
                    lastWorkerUpdateCheck, latestDiscoveredWorkerVersion,
                    lastUpdatedAt, status
             FROM managed_workers WHERE accountId = ? AND workerName = ?
@@ -412,6 +439,7 @@ class LocalDatabase:
             d1DatabaseId=row["d1DatabaseId"],
             d1Name=row["d1Name"],
             installedWorkerVersion=row["installedWorkerVersion"],
+            apiRoute=row["apiRoute"] if ("apiRoute" in row.keys() and row["apiRoute"]) else "sync",
             lastWorkerUpdateCheck=row["lastWorkerUpdateCheck"],
             latestDiscoveredWorkerVersion=row["latestDiscoveredWorkerVersion"],
             lastUpdatedAt=row["lastUpdatedAt"],
@@ -427,6 +455,7 @@ class LocalDatabase:
                 """
                 SELECT workerId, connectionId, accountId, workerName, workerUrl,
                        d1BindingName, d1DatabaseId, d1Name, installedWorkerVersion,
+                       apiRoute,
                        lastWorkerUpdateCheck, latestDiscoveredWorkerVersion,
                        lastUpdatedAt, status
                 FROM managed_workers WHERE accountId = ? ORDER BY workerName ASC
@@ -438,6 +467,7 @@ class LocalDatabase:
                 """
                 SELECT workerId, connectionId, accountId, workerName, workerUrl,
                        d1BindingName, d1DatabaseId, d1Name, installedWorkerVersion,
+                       apiRoute,
                        lastWorkerUpdateCheck, latestDiscoveredWorkerVersion,
                        lastUpdatedAt, status
                 FROM managed_workers ORDER BY workerName ASC
@@ -454,6 +484,7 @@ class LocalDatabase:
                 d1DatabaseId=r["d1DatabaseId"],
                 d1Name=r["d1Name"],
                 installedWorkerVersion=r["installedWorkerVersion"],
+                apiRoute=r["apiRoute"] if ("apiRoute" in r.keys() and r["apiRoute"]) else "sync",
                 lastWorkerUpdateCheck=r["lastWorkerUpdateCheck"],
                 latestDiscoveredWorkerVersion=r["latestDiscoveredWorkerVersion"],
                 lastUpdatedAt=r["lastUpdatedAt"],

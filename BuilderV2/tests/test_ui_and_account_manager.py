@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QLabel, QProgressBar
 
 from BuilderV2.security.credentials import InMemoryCredentialStore
 from BuilderV2.storage.database import LocalDatabase
@@ -26,6 +26,7 @@ from BuilderV2.ui.controllers.worker_controller import WorkerController
 from BuilderV2.ui.controllers.d1_controller import D1Controller
 from BuilderV2.ui.controllers.release_controller import ReleaseController
 from BuilderV2.ui.screens.home_screen import HomeScreen
+from BuilderV2.ui.screens.account_details_screen import AccountDetailsScreen
 from BuilderV2.ui.screens.accounts_screen import AccountsScreen
 from BuilderV2.ui.screens.workers_screen import WorkersScreen
 from BuilderV2.ui.screens.settings_screen import SettingsScreen
@@ -300,57 +301,348 @@ def test_dual_channel_version_independence(mock_mgr_svc_cls, mock_wrk_svc_cls, t
 # =============================================================================
 
 def test_home_screen_ui_components(qapp):
-    """Validates Home screen action buttons and layout."""
+    """Validates Home screen action buttons, empty state, and account cards."""
     screen = HomeScreen()
+    assert screen.btn_add_account is not None
     assert screen.btn_create_worker is not None
     assert screen.btn_update_worker is not None
+    assert "+ Add Account" in screen.btn_add_account.text()
     assert "+ Create Worker" in screen.btn_create_worker.text()
     assert "Update Worker" in screen.btn_update_worker.text()
 
-    # Update metrics and check text
-    screen.update_metrics(
-        connections_count=2,
-        accounts_count=3,
-        workers_count=5,
-        manager_version="v2.0.0",
-        worker_version="v1.2.0",
-        github_status="Live OK"
-    )
-    assert screen.version_badge.text() == "Manager v2.0.0"
+    # Empty state rendering
+    screen.set_accounts([])
+    assert screen.cards_layout.count() > 0
 
-
-def test_accounts_screen_ui_table(qapp, temp_db):
-    """Validates Accounts screen connection table population and selection."""
-    conn = ConnectionRecord(connectionId="c_ui", displayName="UI Connection", status="connected")
-    temp_db.save_connection(conn, token="tok_ui")
-    temp_db.save_account(AccountRecord(accountId="a_ui", connectionId="c_ui", accountName="UI Acc"))
-
-    ctrl = AccountController(temp_db)
-    screen = AccountsScreen(ctrl)
-    screen.load_connections()
-
-    assert screen.table.rowCount() == 1
-    assert screen.table.item(0, 0).text() == "UI Connection"
-    assert "Connected" in screen.table.item(0, 1).text()
-    assert "1 Account" in screen.table.item(0, 2).text()
+    # Populated state rendering
+    sample_accounts = [
+        {
+            "connection_id": "c_1",
+            "connection_name": "Primary Conn",
+            "account_id": "acc_123456789",
+            "account_name": "Prod Account",
+            "workers_count": 3,
+            "d1_count": 2,
+            "requests": "1,500",
+            "requests_num": 1500,
+        }
+    ]
+    screen.set_accounts(sample_accounts)
+    assert screen.cards_layout.count() >= 1
 
 
 def test_main_window_shell_navigation(qapp, temp_db):
-    """Validates Main application shell and tab switching."""
+    """Validates Main application shell focused navigation (Home <-> Account Details)."""
     win = MainWindow(temp_db)
-    assert win.stack.count() == 6  # Home, Workers, D1, Accounts, Analytics, Settings
+    assert win.stack.count() == 2  # Screen 0: Home, Screen 1: Account Details
+    assert win.stack.currentIndex() == 0
 
-    # Switch to Workers
-    win.btn_nav_workers.click()
+    # Open Account Details
+    sample_acc = {
+        "connection_id": "c_test",
+        "account_id": "acc_test",
+        "account_name": "Test Acc",
+        "connection_name": "Conn Test",
+    }
+    win._open_account_details(sample_acc)
     assert win.stack.currentIndex() == 1
+    assert "Test Acc" in win.account_details_screen.lbl_title.text()
 
-    # Switch to Accounts
-    win.btn_nav_accounts.click()
-    assert win.stack.currentIndex() == 3
-
-    # Switch to Settings
-    win.btn_nav_settings.click()
-    assert win.stack.currentIndex() == 5
+    # Return to Home
+    win._return_to_home()
+    assert win.stack.currentIndex() == 0
 
     from PySide6.QtCore import QThreadPool
     QThreadPool.globalInstance().waitForDone(2000)
+
+
+def test_d1_database_correlation(temp_db):
+    """Validates partitioning of D1 databases into linked and unassigned."""
+    d1_ctrl = D1Controller(temp_db)
+    databases = [
+        {"uuid": "uuid-db-1", "name": "luci-proxy-db", "num_tables": 3, "file_size": 16384},
+        {"uuid": "uuid-db-2", "name": "orphan-db", "num_tables": 1, "file_size": 8192},
+    ]
+    workers = [
+        {
+            "name": "luci-proxy",
+            "d1_bindings": [
+                {"database_id": "uuid-db-1", "binding_name": "IOT_DB", "database_name": "luci-proxy-db"}
+            ]
+        }
+    ]
+
+    partitioned = d1_ctrl.correlate_d1_databases(databases, workers)
+    assert len(partitioned["linked"]) == 1
+    assert len(partitioned["unassigned"]) == 1
+    assert partitioned["linked"][0]["name"] == "luci-proxy-db"
+    assert partitioned["linked"][0]["worker_name"] == "luci-proxy"
+    assert partitioned["unassigned"][0]["name"] == "orphan-db"
+    assert partitioned["unassigned"][0]["status"] == "Unassigned"
+
+
+# =============================================================================
+# 5. REQUEST USAGE & QUOTA TRUTHFULNESS REGRESSION TESTS
+# =============================================================================
+
+def test_account_details_real_usage_and_real_quota(qapp, temp_db):
+    """
+    Scenario 1: Real usage + Real quota.
+    When authoritative API returns both usage and an explicit quota denominator,
+    the UI must display 'X / Y', set progress bar bounds to Y, and show 'Quota: Y requests'.
+    """
+    account_ctrl = AccountController(temp_db)
+    worker_ctrl = WorkerController(temp_db)
+    d1_ctrl = D1Controller(temp_db)
+    screen = AccountDetailsScreen(account_ctrl, worker_ctrl, d1_ctrl)
+
+    mock_data = {
+        "summary": {
+            "workers_count": 2,
+            "d1_count": 1,
+            "requests": "1,250",
+            "requests_num": 1250,
+            "quota": "500,000",
+            "quota_num": 500000,
+        },
+        "workers": [],
+        "d1_partitioned": {"linked": [], "unassigned": []},
+    }
+
+    screen._on_data_loaded(mock_data)
+
+    assert screen.lbl_req_count.text() == "1,250 / 500,000"
+    assert "Quota: 500,000 requests" in screen.lbl_quota_subtitle.text()
+    assert not screen.prog_requests.isHidden()
+    assert screen.prog_requests.maximum() == 500000
+    assert screen.prog_requests.value() == 1250
+    assert "100,000" not in screen.lbl_req_count.text()
+    assert "100,000" not in screen.lbl_quota_subtitle.text()
+
+
+def test_account_details_usage_with_unavailable_quota(qapp, temp_db):
+    """
+    Scenario 2: Usage with unavailable quota.
+    When API returns real usage but NO quota denominator, the UI must NEVER invent
+    or assume 100,000. It must display 'Requests: X' and 'Quota: Unavailable',
+    and hide the progress bar.
+    """
+    account_ctrl = AccountController(temp_db)
+    worker_ctrl = WorkerController(temp_db)
+    d1_ctrl = D1Controller(temp_db)
+    screen = AccountDetailsScreen(account_ctrl, worker_ctrl, d1_ctrl)
+
+    mock_data = {
+        "summary": {
+            "workers_count": 2,
+            "d1_count": 1,
+            "requests": "1,250",
+            "requests_num": 1250,
+            "quota": "Unavailable",
+            "quota_num": None,
+        },
+        "workers": [],
+        "d1_partitioned": {"linked": [], "unassigned": []},
+    }
+
+    screen._on_data_loaded(mock_data)
+
+    assert screen.lbl_req_count.text() == "1,250"
+    assert screen.lbl_quota_subtitle.text() == "Quota: Unavailable"
+    assert screen.prog_requests.isHidden()
+    assert "100,000" not in screen.lbl_req_count.text()
+    assert "100,000" not in screen.lbl_quota_subtitle.text()
+
+
+def test_account_details_api_failure(qapp, temp_db):
+    """
+    Scenario 3: API failure / metrics unavailable.
+    When metrics cannot be fetched, UI must display 'Unavailable' for requests and quota,
+    and progress bar must remain hidden.
+    """
+    account_ctrl = AccountController(temp_db)
+    worker_ctrl = WorkerController(temp_db)
+    d1_ctrl = D1Controller(temp_db)
+    screen = AccountDetailsScreen(account_ctrl, worker_ctrl, d1_ctrl)
+
+    mock_data = {
+        "summary": {
+            "workers_count": 0,
+            "d1_count": 0,
+            "requests": "Unavailable",
+            "requests_num": None,
+            "quota": "Unavailable",
+            "quota_num": None,
+        },
+        "workers": [],
+        "d1_partitioned": {"linked": [], "unassigned": []},
+    }
+
+    screen._on_data_loaded(mock_data)
+
+    assert screen.lbl_req_count.text() == "Unavailable"
+    assert screen.lbl_quota_subtitle.text() == "Quota: Unavailable"
+    assert screen.prog_requests.isHidden()
+
+
+def test_account_details_zero_usage(qapp, temp_db):
+    """
+    Scenario 4: Zero usage.
+    Handles zero usage correctly without confusing it with API failure.
+    - 4A: Zero usage + unavailable quota -> '0', 'Quota: Unavailable', progress hidden.
+    - 4B: Zero usage + real quota -> '0 / 200,000', 'Quota: 200,000 requests', progress visible at 0.
+    """
+    account_ctrl = AccountController(temp_db)
+    worker_ctrl = WorkerController(temp_db)
+    d1_ctrl = D1Controller(temp_db)
+    screen = AccountDetailsScreen(account_ctrl, worker_ctrl, d1_ctrl)
+
+    # 4A: Zero usage + unavailable quota
+    mock_data_4a = {
+        "summary": {
+            "workers_count": 1,
+            "d1_count": 1,
+            "requests": "0",
+            "requests_num": 0,
+            "quota": "Unavailable",
+            "quota_num": None,
+        },
+        "workers": [],
+        "d1_partitioned": {"linked": [], "unassigned": []},
+    }
+    screen._on_data_loaded(mock_data_4a)
+    assert screen.lbl_req_count.text() == "0"
+    assert screen.lbl_quota_subtitle.text() == "Quota: Unavailable"
+    assert screen.prog_requests.isHidden()
+
+    # 4B: Zero usage + real quota
+    mock_data_4b = {
+        "summary": {
+            "workers_count": 1,
+            "d1_count": 1,
+            "requests": "0",
+            "requests_num": 0,
+            "quota": "200,000",
+            "quota_num": 200000,
+        },
+        "workers": [],
+        "d1_partitioned": {"linked": [], "unassigned": []},
+    }
+    screen._on_data_loaded(mock_data_4b)
+    assert screen.lbl_req_count.text() == "0 / 200,000"
+    assert "Quota: 200,000 requests" in screen.lbl_quota_subtitle.text()
+    assert not screen.prog_requests.isHidden()
+    assert screen.prog_requests.maximum() == 200000
+    assert screen.prog_requests.value() == 0
+
+
+def test_home_screen_quota_rendering_truth(qapp):
+    """
+    Validates that HomeScreen account cards render truthful request metrics
+    and never inject a hardcoded 100,000 quota.
+    """
+    screen = HomeScreen()
+
+    # Case A: Real usage without quota
+    screen.set_accounts([
+        {
+            "connection_id": "c_1",
+            "connection_name": "Conn",
+            "account_id": "acc_1",
+            "account_name": "Acc 1",
+            "workers_count": 1,
+            "d1_count": 1,
+            "requests": "4,200",
+            "requests_num": 4200,
+            "quota": "Unavailable",
+            "quota_num": None,
+        }
+    ])
+    # Card rendered without invented 100,000 progress bar
+    card = screen.cards_layout.itemAt(0).widget()
+    labels = card.findChildren(QLabel)
+    all_text = " ".join(l.text() for l in labels)
+    assert "4,200" in all_text
+    assert "100,000" not in all_text
+    assert "Quota: Unavailable" in all_text
+    progress_bars = card.findChildren(QProgressBar)
+    assert len(progress_bars) == 0
+
+    # Case B: Real usage with real quota
+    screen.set_accounts([
+        {
+            "connection_id": "c_2",
+            "connection_name": "Conn",
+            "account_id": "acc_2",
+            "account_name": "Acc 2",
+            "workers_count": 1,
+            "d1_count": 1,
+            "requests": "4,200",
+            "requests_num": 4200,
+            "quota": "1,000,000",
+            "quota_num": 1000000,
+        }
+    ])
+    card_b = screen.cards_layout.itemAt(0).widget()
+    labels_b = card_b.findChildren(QLabel)
+    all_text_b = " ".join(l.text() for l in labels_b)
+    assert "4,200 / 1,000,000" in all_text_b
+    progress_bars_b = card_b.findChildren(QProgressBar)
+    assert len(progress_bars_b) == 1
+    assert progress_bars_b[0].maximum() == 1000000
+    assert progress_bars_b[0].value() == 4200
+
+
+def test_account_controller_data_flow_with_analytics_mock(temp_db, monkeypatch):
+    """
+    Traces complete data flow: AnalyticsService -> AccountController -> UI dict.
+    Proves controller correctly maps all 4 states without inventing quota.
+    """
+    from BuilderV2.cloudflare.analytics_service import AnalyticsService
+
+    ctrl = AccountController(temp_db)
+    conn = ConnectionRecord(connectionId="c_flow", displayName="Flow Conn", status="connected")
+    temp_db.save_connection(conn, token="tok_flow")
+    temp_db.save_account(AccountRecord(accountId="acc_flow", connectionId="c_flow", accountName="Flow Acc"))
+
+    # State 1: Real usage + Real quota
+    def mock_invocations_state1(self, account_id, script_name=None, hours=24):
+        return {"available": True, "requests": 5000, "quota": 250000}
+    monkeypatch.setattr(AnalyticsService, "get_worker_invocations", mock_invocations_state1)
+    s1 = ctrl.get_account_summary("c_flow", "acc_flow")
+    assert s1["requests_num"] == 5000
+    assert s1["requests"] == "5,000"
+    assert s1["quota_num"] == 250000
+    assert s1["quota"] == "250,000"
+
+    # State 2: Real usage + Unavailable quota
+    def mock_invocations_state2(self, account_id, script_name=None, hours=24):
+        return {"available": True, "requests": 5000, "quota": None}
+    monkeypatch.setattr(AnalyticsService, "get_worker_invocations", mock_invocations_state2)
+    s2 = ctrl.get_account_summary("c_flow", "acc_flow")
+    assert s2["requests_num"] == 5000
+    assert s2["requests"] == "5,000"
+    assert s2["quota_num"] is None
+    assert s2["quota"] == "Unavailable"
+
+    # State 3: API failure
+    def mock_invocations_state3(self, account_id, script_name=None, hours=24):
+        return {"available": False, "requests": None, "quota": None, "reason": "GraphQL Error"}
+    monkeypatch.setattr(AnalyticsService, "get_worker_invocations", mock_invocations_state3)
+    s3 = ctrl.get_account_summary("c_flow", "acc_flow")
+    assert s3["requests_num"] is None
+    assert s3["requests"] == "Unavailable"
+    assert s3["quota_num"] is None
+    assert s3["quota"] == "Unavailable"
+
+    # State 4: Zero usage
+    def mock_invocations_state4(self, account_id, script_name=None, hours=24):
+        return {"available": True, "requests": 0, "quota": None}
+    monkeypatch.setattr(AnalyticsService, "get_worker_invocations", mock_invocations_state4)
+    s4 = ctrl.get_account_summary("c_flow", "acc_flow")
+    assert s4["requests_num"] == 0
+    assert s4["requests"] == "0"
+    assert s4["quota_num"] is None
+    assert s4["quota"] == "Unavailable"
+
+

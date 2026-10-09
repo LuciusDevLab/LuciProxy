@@ -1,10 +1,11 @@
 """
-LuciProxy Manager - Home Screen Widget.
-Prominently features [ Create Worker ] and [ Update Worker ] entry points,
-dual-channel update summary, connected account totals, and GitHub check status.
+LuciProxy Manager - Home Screen.
+Core operational center featuring primary action buttons:
+[ Add Account ], [ Create Worker ], [ Update Worker ]
+and dynamically populated Cloudflare account cards with quota progress bars.
 """
 
-from typing import Optional
+from typing import Any, Dict, List, Optional
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QWidget,
@@ -12,200 +13,397 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QProgressBar,
+    QScrollArea,
     QFrame,
-    QMessageBox,
 )
+
+HOME_SCREEN_STYLE = """
+QWidget {
+    background-color: #0a0a0a;
+    color: #ffffff;
+}
+QFrame#actionBanner {
+    background-color: #111111;
+    border: 1px solid #27272a;
+    border-radius: 10px;
+    padding: 16px;
+}
+QFrame#accountCard {
+    background-color: #111111;
+    border: 1px solid #27272a;
+    border-radius: 10px;
+    padding: 16px;
+}
+QFrame#accountCard:hover {
+    border: 1px solid #3b82f6;
+    background-color: #141416;
+}
+QProgressBar {
+    background-color: #18181b;
+    border: 1px solid #27272a;
+    border-radius: 4px;
+    text-align: center;
+    color: #ffffff;
+    height: 16px;
+    font-size: 10px;
+    font-weight: bold;
+}
+QProgressBar::chunk {
+    background-color: #2563eb;
+    border-radius: 3px;
+}
+QPushButton {
+    background-color: #27272a;
+    color: #ffffff;
+    border: 1px solid #3f3f46;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 500;
+}
+QPushButton:hover {
+    background-color: #3f3f46;
+}
+QPushButton#btnPrimary {
+    background-color: #2563eb;
+    border: 1px solid #1d4ed8;
+    color: #ffffff;
+    font-weight: bold;
+    font-size: 14px;
+    padding: 10px 20px;
+}
+QPushButton#btnPrimary:hover {
+    background-color: #1d4ed8;
+}
+QPushButton#btnSecondary {
+    background-color: #0284c7;
+    border: 1px solid #0369a1;
+    color: #ffffff;
+    font-weight: bold;
+    font-size: 14px;
+    padding: 10px 20px;
+}
+QPushButton#btnSecondary:hover {
+    background-color: #0369a1;
+}
+QPushButton#btnTertiary {
+    background-color: #18181b;
+    border: 1px solid #27272a;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 14px;
+    padding: 10px 18px;
+}
+QPushButton#btnTertiary:hover {
+    background-color: #27272a;
+}
+QPushButton#btnOpen {
+    background-color: #2563eb;
+    border: 1px solid #1d4ed8;
+    color: #ffffff;
+    font-weight: bold;
+    font-size: 13px;
+    padding: 8px 18px;
+}
+QPushButton#btnOpen:hover {
+    background-color: #1d4ed8;
+}
+"""
 
 
 class HomeScreen(QWidget):
-    """Home screen providing the primary operational overview and action entry points."""
+    """Home screen displaying top action buttons and account overview cards."""
 
+    add_account_requested = Signal()
     create_worker_requested = Signal()
     update_worker_requested = Signal()
+    open_account_requested = Signal(dict)
     refresh_requested = Signal()
 
     def __init__(self, parent: Optional = None):
         super().__init__(parent)
+        self.setStyleSheet(HOME_SCREEN_STYLE)
         self._init_ui()
 
     def _init_ui(self) -> None:
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(32, 32, 32, 32)
-        layout.setSpacing(24)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(28, 28, 28, 28)
+        main_layout.setSpacing(20)
 
         # 1. Header Banner
-        header_layout = QVBoxLayout()
-        header_layout.setSpacing(6)
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(12)
 
-        title_label = QLabel("LuciProxy Manager")
-        title_label.setObjectName("appTitle")
-        title_label.setStyleSheet("font-size: 26px; font-weight: bold; color: #1e293b;")
+        title_col = QVBoxLayout()
+        title_col.setSpacing(4)
+        lbl_title = QLabel("LuciProxy Manager")
+        lbl_title.setStyleSheet("font-size: 24px; font-weight: bold; color: #ffffff;")
+        lbl_sub = QLabel("Focused Cloudflare Worker & D1 Manager")
+        lbl_sub.setStyleSheet("font-size: 13px; color: #a1a1aa;")
+        title_col.addWidget(lbl_title)
+        title_col.addWidget(lbl_sub)
+        header_layout.addLayout(title_col)
 
-        self.version_badge = QLabel("Manager v2.0.0")
-        self.version_badge.setObjectName("versionBadge")
-        self.version_badge.setStyleSheet(
-            "font-size: 14px; font-weight: 600; color: #0284c7; "
-            "background-color: #e0f2fe; border-radius: 6px; padding: 4px 10px; max-width: 140px;"
+        header_layout.addStretch()
+
+        ver_badge = QLabel("Target Worker: v1.2.1")
+        ver_badge.setStyleSheet(
+            "background-color: #18181b; border: 1px solid #27272a; "
+            "color: #38bdf8; font-weight: bold; font-size: 12px; "
+            "padding: 6px 14px; border-radius: 6px;"
         )
+        header_layout.addWidget(ver_badge)
 
-        header_layout.addWidget(title_label)
-        header_layout.addWidget(self.version_badge)
-        layout.addLayout(header_layout)
+        main_layout.addLayout(header_layout)
 
-        # 2. Prominent Action Buttons Section
-        actions_frame = QFrame()
-        actions_frame.setStyleSheet(
-            "background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px;"
+        # Update Banner (Hidden by default, shown when updates exist)
+        self.update_banner = QFrame()
+        self.update_banner.setStyleSheet(
+            "background-color: #172554; border: 1px solid #1e40af; border-radius: 8px; padding: 10px 16px;"
         )
-        actions_layout = QHBoxLayout(actions_frame)
-        actions_layout.setSpacing(16)
+        self.update_banner_layout = QHBoxLayout(self.update_banner)
+        self.update_banner_layout.setContentsMargins(8, 6, 8, 6)
+        self.update_banner_layout.setSpacing(12)
+
+        self.lbl_update_banner = QLabel("")
+        self.lbl_update_banner.setStyleSheet("color: #bfdbfe; font-size: 13px; font-weight: 500;")
+        self.update_banner_layout.addWidget(self.lbl_update_banner)
+
+        self.update_banner_layout.addStretch()
+
+        self.btn_update_banner = QPushButton("Review & Update")
+        self.btn_update_banner.setStyleSheet(
+            "background-color: #2563eb; color: #ffffff; border: none; padding: 6px 14px; "
+            "border-radius: 6px; font-weight: bold; font-size: 12px;"
+        )
+        self.btn_update_banner.setCursor(Qt.PointingHandCursor)
+        self.btn_update_banner.clicked.connect(self.update_worker_requested.emit)
+        self.update_banner_layout.addWidget(self.btn_update_banner)
+
+        self.update_banner.setVisible(False)
+        main_layout.addWidget(self.update_banner)
+
+        # 2. Prominent Action Bar [ Add Account ] [ Create Worker ] [ Update Worker ]
+        action_frame = QFrame()
+        action_frame.setObjectName("actionBanner")
+        action_layout = QHBoxLayout(action_frame)
+        action_layout.setSpacing(14)
+        action_layout.setContentsMargins(12, 10, 12, 10)
+
+        self.btn_add_account = QPushButton("+ Add Account")
+        self.btn_add_account.setObjectName("btnPrimary")
+        self.btn_add_account.setCursor(Qt.PointingHandCursor)
+        self.btn_add_account.clicked.connect(self.add_account_requested.emit)
+        action_layout.addWidget(self.btn_add_account)
 
         self.btn_create_worker = QPushButton("+ Create Worker")
-        self.btn_create_worker.setObjectName("btnCreateWorker")
+        self.btn_create_worker.setObjectName("btnSecondary")
         self.btn_create_worker.setCursor(Qt.PointingHandCursor)
-        self.btn_create_worker.setStyleSheet(
-            "QPushButton { background-color: #2563eb; color: white; font-size: 16px; font-weight: bold; "
-            "padding: 14px 28px; border-radius: 8px; border: none; } "
-            "QPushButton:hover { background-color: #1d4ed8; } "
-            "QPushButton:pressed { background-color: #1e40af; }"
-        )
-        self.btn_create_worker.clicked.connect(self._on_create_worker_clicked)
+        self.btn_create_worker.clicked.connect(self.create_worker_requested.emit)
+        action_layout.addWidget(self.btn_create_worker)
 
         self.btn_update_worker = QPushButton("⟳ Update Worker")
-        self.btn_update_worker.setObjectName("btnUpdateWorker")
+        self.btn_update_worker.setObjectName("btnTertiary")
         self.btn_update_worker.setCursor(Qt.PointingHandCursor)
-        self.btn_update_worker.setStyleSheet(
-            "QPushButton { background-color: #0284c7; color: white; font-size: 16px; font-weight: bold; "
-            "padding: 14px 28px; border-radius: 8px; border: none; } "
-            "QPushButton:hover { background-color: #0369a1; } "
-            "QPushButton:pressed { background-color: #075985; }"
-        )
-        self.btn_update_worker.clicked.connect(self._on_update_worker_clicked)
+        self.btn_update_worker.clicked.connect(self.update_worker_requested.emit)
+        action_layout.addWidget(self.btn_update_worker)
 
-        actions_layout.addWidget(self.btn_create_worker)
-        actions_layout.addWidget(self.btn_update_worker)
-        actions_layout.addStretch()
+        action_layout.addStretch()
 
-        layout.addWidget(actions_frame)
-
-        # 3. Overview Metric Cards Grid
-        cards_layout = QHBoxLayout()
-        cards_layout.setSpacing(16)
-
-        # Accounts Card
-        self.card_accounts = self._create_metric_card("Cloudflare Accounts", "0 Connected", "0 Accounts accessible")
-        cards_layout.addWidget(self.card_accounts)
-
-        # Workers Card
-        self.card_workers = self._create_metric_card("Workers", "0 Managed", "Ready to deploy")
-        cards_layout.addWidget(self.card_workers)
-
-        # Updates Card
-        self.card_updates = self._create_metric_card("Updates", "Checking...", "Dual-channel sync")
-        cards_layout.addWidget(self.card_updates)
-
-        layout.addLayout(cards_layout)
-
-        # 4. Status Bar / GitHub Last Checked
-        status_layout = QHBoxLayout()
-        self.lbl_github_status = QLabel("GitHub Status: Not checked yet")
-        self.lbl_github_status.setStyleSheet("color: #64748b; font-size: 13px;")
-
-        self.btn_refresh = QPushButton("⟳ Check Updates")
+        self.btn_refresh = QPushButton("⟳ Refresh")
         self.btn_refresh.setCursor(Qt.PointingHandCursor)
-        self.btn_refresh.setStyleSheet(
-            "QPushButton { background: none; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 12px; color: #475569; } "
-            "QPushButton:hover { background-color: #f1f5f9; }"
-        )
         self.btn_refresh.clicked.connect(self.refresh_requested.emit)
+        action_layout.addWidget(self.btn_refresh)
 
-        status_layout.addWidget(self.lbl_github_status)
-        status_layout.addStretch()
-        status_layout.addWidget(self.btn_refresh)
+        main_layout.addWidget(action_frame)
 
-        layout.addLayout(status_layout)
-        layout.addStretch()
+        # 3. Section Title
+        lbl_accounts_title = QLabel("Connected Cloudflare Accounts")
+        lbl_accounts_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #ffffff;")
+        main_layout.addWidget(lbl_accounts_title)
 
-    def _create_metric_card(self, title: str, main_val: str, subtitle: str) -> QFrame:
-        card = QFrame()
-        card.setStyleSheet(
-            "QFrame { background-color: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; } "
-            "QFrame:hover { border-color: #cbd5e1; }"
-        )
-        card_layout = QVBoxLayout(card)
-        card_layout.setSpacing(4)
+        # 4. Scrollable Accounts List Area
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setStyleSheet("QScrollArea { border: none; background: transparent; }")
 
-        t_lbl = QLabel(title)
-        t_lbl.setStyleSheet("font-size: 13px; font-weight: 600; color: #64748b; text-transform: uppercase;")
+        self.cards_container = QWidget()
+        self.cards_layout = QVBoxLayout(self.cards_container)
+        self.cards_layout.setContentsMargins(0, 0, 0, 0)
+        self.cards_layout.setSpacing(12)
 
-        m_lbl = QLabel(main_val)
-        m_lbl.setObjectName(f"val_{title.replace(' ', '')}")
-        m_lbl.setStyleSheet("font-size: 22px; font-weight: bold; color: #0f172a;")
+        self.scroll_area.setWidget(self.cards_container)
+        main_layout.addWidget(self.scroll_area)
 
-        s_lbl = QLabel(subtitle)
-        s_lbl.setObjectName(f"sub_{title.replace(' ', '')}")
-        s_lbl.setStyleSheet("font-size: 12px; color: #94a3b8;")
-
-        card_layout.addWidget(t_lbl)
-        card_layout.addWidget(m_lbl)
-        card_layout.addWidget(s_lbl)
-        return card
-
-    def update_metrics(
+    def set_updates_summary(
         self,
-        connections_count: int,
-        accounts_count: int,
-        workers_count: int,
-        manager_version: str,
-        worker_version: str,
-        github_status: str
+        worker_updates_count: int,
+        latest_worker_version: str,
+        app_has_update: bool = False,
+        latest_app_version: str = "",
     ) -> None:
-        """Updates UI display with current system metrics."""
-        self.version_badge.setText(f"Manager {manager_version}")
+        """Updates the in-app update banner dynamically."""
+        if worker_updates_count > 0:
+            v_str = f"v{latest_worker_version}" if not latest_worker_version.startswith("v") else latest_worker_version
+            self.lbl_update_banner.setText(
+                f"🛡️ Worker Update Available: {v_str} is available for {worker_updates_count} Worker(s)."
+            )
+            self.btn_update_banner.setText("Update Worker")
+            self.btn_update_banner.setVisible(True)
+            self.update_banner.setVisible(True)
+        elif app_has_update:
+            v_str = f"v{latest_app_version}" if not latest_app_version.startswith("v") else latest_app_version
+            self.lbl_update_banner.setText(
+                f"⚡ Manager Update Available: LuciProxy Manager {v_str} is now available."
+            )
+            self.btn_update_banner.setText("Open Release")
+            self.btn_update_banner.setVisible(True)
+            self.update_banner.setVisible(True)
+        else:
+            self.update_banner.setVisible(False)
 
-        # Accounts
-        m_acc = self.card_accounts.findChild(QLabel, "val_CloudflareAccounts")
-        s_acc = self.card_accounts.findChild(QLabel, "sub_CloudflareAccounts")
-        if m_acc:
-            m_acc.setText(f"{connections_count} Connected")
-        if s_acc:
-            s_acc.setText(f"{accounts_count} Accounts accessible")
+    def set_accounts(self, accounts: List[Dict[str, Any]]) -> None:
+        """Renders account cards or empty state."""
+        # Clear existing card widgets
+        while self.cards_layout.count():
+            item = self.cards_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
 
-        # Workers
-        m_wrk = self.card_workers.findChild(QLabel, "val_Workers")
-        s_wrk = self.card_workers.findChild(QLabel, "sub_Workers")
-        if m_wrk:
-            m_wrk.setText(f"{workers_count} Managed")
-        if s_wrk:
-            s_wrk.setText(f"Worker Release: {worker_version}")
+        if not accounts:
+            self._render_empty_state()
+            return
 
-        # Updates
-        m_upd = self.card_updates.findChild(QLabel, "val_Updates")
-        s_upd = self.card_updates.findChild(QLabel, "sub_Updates")
-        if m_upd:
-            m_upd.setText(f"Worker: {worker_version}")
-        if s_upd:
-            s_upd.setText(f"Manager: {manager_version}")
+        for acc in accounts:
+            card = self._create_account_card(acc)
+            self.cards_layout.addWidget(card)
 
-        # GitHub Status
-        self.lbl_github_status.setText(f"GitHub Status: {github_status}")
+        self.cards_layout.addStretch()
 
-    def _on_create_worker_clicked(self) -> None:
-        """Action entry point for Create Worker."""
-        self.create_worker_requested.emit()
-        QMessageBox.information(
-            self,
-            "Create Worker",
-            "Create Worker Wizard entry point ready.\n\n"
-            "Worker deployment orchestration is scheduled for Phase 6."
+    def _render_empty_state(self) -> None:
+        empty_frame = QFrame()
+        empty_frame.setStyleSheet(
+            "background-color: #111111; border: 1px dashed #27272a; "
+            "border-radius: 12px; padding: 40px;"
         )
+        empty_layout = QVBoxLayout(empty_frame)
+        empty_layout.setAlignment(Qt.AlignCenter)
+        empty_layout.setSpacing(12)
 
-    def _on_update_worker_clicked(self) -> None:
-        """Action entry point for Update Worker."""
-        self.update_worker_requested.emit()
-        QMessageBox.information(
-            self,
-            "Update Worker",
-            "Update Worker Wizard entry point ready.\n\n"
-            "Worker update orchestration is scheduled for Phase 6."
+        lbl_icon = QLabel("☁️")
+        lbl_icon.setStyleSheet("font-size: 36px;")
+        lbl_icon.setAlignment(Qt.AlignCenter)
+        empty_layout.addWidget(lbl_icon)
+
+        lbl_head = QLabel("No Cloudflare Accounts Connected")
+        lbl_head.setStyleSheet("font-size: 16px; font-weight: bold; color: #ffffff;")
+        lbl_head.setAlignment(Qt.AlignCenter)
+        empty_layout.addWidget(lbl_head)
+
+        lbl_desc = QLabel(
+            "Click [ Add Account ] above to connect your Cloudflare account "
+            "using an API token and begin deploying workers."
         )
+        lbl_desc.setStyleSheet("font-size: 13px; color: #a1a1aa;")
+        lbl_desc.setAlignment(Qt.AlignCenter)
+        empty_layout.addWidget(lbl_desc)
+
+        btn_add = QPushButton("+ Add Account")
+        btn_add.setObjectName("btnPrimary")
+        btn_add.setCursor(Qt.PointingHandCursor)
+        btn_add.clicked.connect(self.add_account_requested.emit)
+        empty_layout.addWidget(btn_add, alignment=Qt.AlignCenter)
+
+        self.cards_layout.addWidget(empty_frame)
+        self.cards_layout.addStretch()
+
+    def _create_account_card(self, acc: Dict[str, Any]) -> QFrame:
+        card = QFrame()
+        card.setObjectName("accountCard")
+        card_layout = QHBoxLayout(card)
+        card_layout.setContentsMargins(16, 16, 16, 16)
+        card_layout.setSpacing(20)
+
+        # Left Column: Account Name, ID, Connection label
+        left_col = QVBoxLayout()
+        left_col.setSpacing(4)
+
+        lbl_name = QLabel(acc.get("account_name", "Cloudflare Account"))
+        lbl_name.setStyleSheet("font-size: 17px; font-weight: bold; color: #ffffff;")
+        left_col.addWidget(lbl_name)
+
+        lbl_id = QLabel(f"ID: {acc.get('account_id', 'Unknown')}")
+        lbl_id.setStyleSheet("font-family: monospace; font-size: 11px; color: #9ca3af;")
+        left_col.addWidget(lbl_id)
+
+        has_cred = acc.get("has_credential", True)
+        conn_text = f"Connection: {acc.get('connection_name', 'Default')}"
+        if not has_cred:
+            lbl_conn = QLabel(f"{conn_text} &nbsp;<span style='color: #f59e0b; font-weight: bold;'>[⚠️ Credential Unavailable]</span>")
+        else:
+            lbl_conn = QLabel(conn_text)
+        lbl_conn.setStyleSheet("font-size: 11px; color: #64748b;")
+        left_col.addWidget(lbl_conn)
+
+        card_layout.addLayout(left_col, stretch=2)
+
+        # Middle Column: Stats & Quota Progress Bar
+        mid_col = QVBoxLayout()
+        mid_col.setSpacing(6)
+
+        stats_row = QHBoxLayout()
+        stats_row.setSpacing(16)
+
+        w_count = acc.get("workers_count", 0)
+        lbl_workers = QLabel(f"Workers: <b>{w_count}</b>")
+        lbl_workers.setStyleSheet("color: #e2e8f0; font-size: 12px;")
+        stats_row.addWidget(lbl_workers)
+
+        d1_count = acc.get("d1_count", 0)
+        lbl_d1 = QLabel(f"D1 Databases: <b>{d1_count}</b>")
+        lbl_d1.setStyleSheet("color: #e2e8f0; font-size: 12px;")
+        stats_row.addWidget(lbl_d1)
+
+        req_text = acc.get("requests", "Unavailable")
+        req_num = acc.get("requests_num")
+        quota_num = acc.get("quota_num")
+        quota_text = acc.get("quota", "Unavailable")
+
+        if req_num is not None:
+            if quota_num is not None and quota_num > 0:
+                lbl_req = QLabel(f"Requests: <b>{req_text} / {quota_text}</b>")
+            else:
+                lbl_req = QLabel(f"Requests: <b>{req_text}</b> (Quota: Unavailable)")
+        else:
+            lbl_req = QLabel("Requests: <b>Unavailable</b> (Quota: Unavailable)")
+        lbl_req.setStyleSheet("color: #38bdf8; font-size: 12px;")
+        stats_row.addWidget(lbl_req)
+
+        stats_row.addStretch()
+        mid_col.addLayout(stats_row)
+
+        # Progress bar for requests (only rendered if authoritative quota is available)
+        if req_num is not None and quota_num is not None and quota_num > 0:
+            prog = QProgressBar()
+            prog.setRange(0, quota_num)
+            prog.setValue(min(req_num, quota_num))
+            prog.setFormat(f"{req_num:,} / {quota_num:,} (%p%)")
+            mid_col.addWidget(prog)
+
+        card_layout.addLayout(mid_col, stretch=3)
+
+        # Right Column: [ Open ] Action Button
+        right_col = QVBoxLayout()
+        right_col.setAlignment(Qt.AlignCenter)
+
+        btn_open = QPushButton("Open →")
+        btn_open.setObjectName("btnOpen")
+        btn_open.setCursor(Qt.PointingHandCursor)
+        btn_open.clicked.connect(lambda _, a=acc: self.open_account_requested.emit(a))
+        right_col.addWidget(btn_open)
+
+        card_layout.addLayout(right_col)
+
+        return card

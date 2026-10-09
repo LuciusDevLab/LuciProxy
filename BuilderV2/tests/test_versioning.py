@@ -188,8 +188,8 @@ def test_version_files_isolation():
     m_data = json.loads(manager_file.read_text(encoding="utf-8"))
 
     # Worker manifest checks
-    assert w_data.get("version") == "1.2.1"
-    assert w_data.get("source_revision") == "3aafad12745c59a849610d603fc22b22f656ac36"
+    assert w_data.get("version") == "1.2.2"
+    assert w_data.get("source_revision") == "e0b338e8ac8f238d78281fa64f77e678b9fe55d8"
     assert "manager" not in w_data.get("version", "").lower()
 
     # Manager manifest checks

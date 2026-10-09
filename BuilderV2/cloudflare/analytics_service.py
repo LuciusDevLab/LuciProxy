@@ -75,13 +75,19 @@ class AnalyticsService:
             # Normalize response structure
             accounts = data.get("viewer", {}).get("accounts", [])
             if not accounts:
-                return {"available": False, "reason": "No account metrics found."}
+                return {
+                    "available": False,
+                    "requests": None,
+                    "quota": None,
+                    "reason": "No account metrics found.",
+                }
 
             invocations = accounts[0].get("workersInvocationsAdaptive", [])
             if not invocations:
                 return {
                     "available": True,
                     "requests": 0,
+                    "quota": None,
                     "errors": 0,
                     "subrequests": 0,
                     "cpu_time_p50": 0,
@@ -92,9 +98,14 @@ class AnalyticsService:
             sums = first.get("sum", {})
             quantiles = first.get("quantiles", {})
 
+            # Authoritative quota: only populated if returned by the service
+            raw_quota = sums.get("quota") or first.get("quota")
+            quota_val = int(raw_quota) if (raw_quota is not None and str(raw_quota).isdigit()) else None
+
             return {
                 "available": True,
                 "requests": sums.get("requests", 0),
+                "quota": quota_val,
                 "errors": sums.get("errors", 0),
                 "subrequests": sums.get("subrequests", 0),
                 "cpu_time_p50": quantiles.get("cpuTimeP50", 0),
@@ -106,15 +117,21 @@ class AnalyticsService:
             # Plan or token not permitted for GraphQL analytics
             return {
                 "available": False,
+                "requests": None,
+                "quota": None,
                 "reason": f"GraphQL Analytics unavailable: {e.message}",
             }
         except PermissionDeniedError:
             return {
                 "available": False,
+                "requests": None,
+                "quota": None,
                 "reason": "Token lacks permission for Analytics.",
             }
         except Exception as e:
             return {
                 "available": False,
+                "requests": None,
+                "quota": None,
                 "reason": str(e),
             }

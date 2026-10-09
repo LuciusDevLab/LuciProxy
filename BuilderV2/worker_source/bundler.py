@@ -113,7 +113,7 @@ class WorkerBundler:
         if output_file:
             out_path = Path(output_file)
             out_path.parent.mkdir(parents=True, exist_ok=True)
-            out_path.write_text(out_content, encoding="utf-8")
+            out_path.write_bytes(out_content.encode("utf-8"))
 
         sha256 = hashlib.sha256(out_content.encode("utf-8")).hexdigest().lower()
         return out_content, sha256

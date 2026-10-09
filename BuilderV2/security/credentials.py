@@ -68,24 +68,98 @@ class InMemoryCredentialStore(SecureCredentialStore):
         return count
 
 
+if sys.platform == "win32":
+    import ctypes
+    from ctypes import wintypes
+
+    class _CREDENTIALW(ctypes.Structure):
+        _fields_ = [
+            ("Flags", wintypes.DWORD),
+            ("Type", wintypes.DWORD),
+            ("TargetName", wintypes.LPWSTR),
+            ("Comment", wintypes.LPWSTR),
+            ("LastWritten", wintypes.FILETIME),
+            ("CredentialBlobSize", wintypes.DWORD),
+            ("CredentialBlob", ctypes.POINTER(ctypes.c_byte)),
+            ("Persist", wintypes.DWORD),
+            ("AttributeCount", wintypes.DWORD),
+            ("Attributes", ctypes.c_void_p),
+            ("TargetAlias", wintypes.LPWSTR),
+            ("UserName", wintypes.LPWSTR),
+        ]
+
+CRED_TYPE_GENERIC = 1
+CRED_PERSIST_LOCAL_MACHINE = 2
+ERROR_NOT_FOUND = 1168
+
+
+def _decode_credential_blob(raw_bytes: bytes) -> str:
+    """Decodes credential blob handling UTF-16-LE, UTF-8, and fallback formats."""
+    if len(raw_bytes) >= 2 and raw_bytes[1] == 0:
+        try:
+            return raw_bytes.decode("utf-16-le")
+        except UnicodeDecodeError:
+            pass
+    try:
+        return raw_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw_bytes.decode("utf-16-le", errors="ignore")
+
+
 class WindowsCredentialStore(SecureCredentialStore):
     """
     Windows-native Credential Manager store.
-    Uses win32cred (Windows Credential Vault) with DPAPI protection.
-    Falls back gracefully to DPAPI / secure in-memory if win32cred is unavailable.
+    Directly interfaces with Windows Credential Vault (advapi32.dll) via standard library ctypes.
+    Ensures Cloudflare tokens persist across process terminations, logoffs, and reboots.
+    Tokens are encrypted by DPAPI under the local user profile and NEVER touch SQLite or plaintext files.
     """
 
-    def __init__(self):
-        self._win32cred = None
-        if sys.platform == "win32":
-            try:
-                import win32cred
-                self._win32cred = win32cred
-            except ImportError:
-                self._win32cred = None
-
-        # Fallback dictionary if running on non-Windows or win32cred missing
+    def __init__(self, force_in_memory: bool = False):
+        self._native_available = False
+        self._advapi32 = None
         self._fallback_store = InMemoryCredentialStore()
+
+        if sys.platform == "win32" and not force_in_memory:
+            try:
+                import ctypes
+                from ctypes import wintypes
+                advapi = ctypes.windll.advapi32
+
+                advapi.CredWriteW.argtypes = [ctypes.POINTER(_CREDENTIALW), wintypes.DWORD]
+                advapi.CredWriteW.restype = wintypes.BOOL
+
+                advapi.CredReadW.argtypes = [
+                    wintypes.LPCWSTR,
+                    wintypes.DWORD,
+                    wintypes.DWORD,
+                    ctypes.POINTER(ctypes.POINTER(_CREDENTIALW)),
+                ]
+                advapi.CredReadW.restype = wintypes.BOOL
+
+                advapi.CredDeleteW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD]
+                advapi.CredDeleteW.restype = wintypes.BOOL
+
+                advapi.CredEnumerateW.argtypes = [
+                    wintypes.LPCWSTR,
+                    wintypes.DWORD,
+                    ctypes.POINTER(wintypes.DWORD),
+                    ctypes.POINTER(ctypes.POINTER(ctypes.POINTER(_CREDENTIALW))),
+                ]
+                advapi.CredEnumerateW.restype = wintypes.BOOL
+
+                advapi.CredFree.argtypes = [ctypes.c_void_p]
+                advapi.CredFree.restype = None
+
+                self._advapi32 = advapi
+                self._native_available = True
+            except Exception:
+                self._native_available = False
+                self._advapi32 = None
+
+    @property
+    def is_native(self) -> bool:
+        """Returns True if connected to native Windows Credential Manager, False if using fallback."""
+        return self._native_available
 
     def _target_name(self, connection_id: str) -> str:
         return f"{TARGET_PREFIX}{connection_id}"
@@ -95,62 +169,74 @@ class WindowsCredentialStore(SecureCredentialStore):
         if not cleaned:
             raise ValueError("Cannot save empty token.")
 
-        if self._win32cred:
-            import win32cred
+        if self._native_available and self._advapi32:
+            import ctypes
             target = self._target_name(connection_id)
-            cred_blob = cleaned.encode("utf-16-le")
-            cred_dict = {
-                "TargetName": target,
-                "Type": win32cred.CRED_TYPE_GENERIC,
-                "CredentialBlob": cred_blob,
-                "Persist": win32cred.CRED_PERSIST_LOCAL_MACHINE,
-                "Comment": "LuciProxy Manager Cloudflare API Token",
-            }
-            win32cred.CredWrite(cred_dict, 0)
+            raw = cleaned.encode("utf-8")
+            blob = (ctypes.c_byte * len(raw))(*raw)
+
+            cred = _CREDENTIALW()
+            cred.Flags = 0
+            cred.Type = CRED_TYPE_GENERIC
+            cred.TargetName = target
+            cred.Comment = "LuciProxy Manager Cloudflare API Token"
+            cred.CredentialBlobSize = len(raw)
+            cred.CredentialBlob = ctypes.cast(blob, ctypes.POINTER(ctypes.c_byte))
+            cred.Persist = CRED_PERSIST_LOCAL_MACHINE
+            cred.AttributeCount = 0
+            cred.Attributes = None
+            cred.TargetAlias = None
+            cred.UserName = connection_id
+
+            ok = self._advapi32.CredWriteW(ctypes.byref(cred), 0)
+            if not ok:
+                err_code = ctypes.GetLastError()
+                raise RuntimeError(
+                    f"Failed to persist API token in Windows Credential Manager for '{connection_id}' (Win32 Error: {err_code})."
+                )
         else:
             self._fallback_store.save_token(connection_id, cleaned)
 
     def get_token(self, connection_id: str) -> Optional[str]:
-        if self._win32cred:
-            import win32cred
+        if self._native_available and self._advapi32:
+            import ctypes
             target = self._target_name(connection_id)
+            p_cred = ctypes.POINTER(_CREDENTIALW)()
+            ok = self._advapi32.CredReadW(target, CRED_TYPE_GENERIC, 0, ctypes.byref(p_cred))
+            if not ok:
+                # Target does not exist or read failed
+                return None
+
             try:
-                cred = win32cred.CredRead(target, win32cred.CRED_TYPE_GENERIC, 0)
-                blob = cred.get("CredentialBlob")
-                if blob:
-                    return blob.decode("utf-16-le")
-                return None
-            except Exception:
-                return None
+                raw = ctypes.string_at(p_cred.contents.CredentialBlob, p_cred.contents.CredentialBlobSize)
+                return _decode_credential_blob(raw)
+            finally:
+                self._advapi32.CredFree(p_cred)
         return self._fallback_store.get_token(connection_id)
 
     def delete_token(self, connection_id: str) -> bool:
-        if self._win32cred:
-            import win32cred
+        if self._native_available and self._advapi32:
             target = self._target_name(connection_id)
-            try:
-                win32cred.CredDelete(target, win32cred.CRED_TYPE_GENERIC, 0)
-                return True
-            except Exception:
-                return False
+            ok = self._advapi32.CredDeleteW(target, CRED_TYPE_GENERIC, 0)
+            return bool(ok)
         return self._fallback_store.delete_token(connection_id)
 
     def delete_all_tokens(self) -> int:
-        count = 0
-        if self._win32cred:
-            import win32cred
+        if self._native_available and self._advapi32:
+            from ctypes import wintypes
+            p_count = wintypes.DWORD(0)
+            p_creds = ctypes.POINTER(ctypes.POINTER(_CREDENTIALW))()
+            ok = self._advapi32.CredEnumerateW(None, 0, ctypes.byref(p_count), ctypes.byref(p_creds))
+            if not ok:
+                return 0
+            count = 0
             try:
-                creds = win32cred.CredEnumerate(None, 0)
-                for cred in creds:
-                    target = cred.get("TargetName", "")
-                    if target.startswith(TARGET_PREFIX):
-                        try:
-                            win32cred.CredDelete(target, win32cred.CRED_TYPE_GENERIC, 0)
+                for i in range(p_count.value):
+                    target = p_creds[i].contents.TargetName
+                    if target and target.startswith(TARGET_PREFIX):
+                        if self._advapi32.CredDeleteW(target, CRED_TYPE_GENERIC, 0):
                             count += 1
-                        except Exception:
-                            pass
-            except Exception:
-                pass
-        else:
-            count = self._fallback_store.delete_all_tokens()
-        return count
+            finally:
+                self._advapi32.CredFree(p_creds)
+            return count
+        return self._fallback_store.delete_all_tokens()

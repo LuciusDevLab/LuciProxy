@@ -7,7 +7,7 @@ from datetime import datetime
 import sqlite3
 from typing import List, Tuple
 
-from .schema import CURRENT_SCHEMA_VERSION, SCHEMA_V1_SQL, MIGRATION_V1_TO_V2_SQL
+from .schema import CURRENT_SCHEMA_VERSION, SCHEMA_V1_SQL, MIGRATION_V1_TO_V2_SQL, MIGRATION_V2_TO_V3_SQL
 
 
 class MigrationManager:
@@ -16,6 +16,7 @@ class MigrationManager:
     MIGRATIONS: List[Tuple[int, str, str]] = [
         (1, "Initial baseline schema with separate app_state, connections, accounts, workers, d1, and history", SCHEMA_V1_SQL),
         (2, "Add performance indexes on update_history and connection status", MIGRATION_V1_TO_V2_SQL),
+        (3, "Add apiRoute column to managed_workers", MIGRATION_V2_TO_V3_SQL),
     ]
 
     @classmethod

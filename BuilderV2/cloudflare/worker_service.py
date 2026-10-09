@@ -282,6 +282,28 @@ class WorkerService:
             step="Enable Worker Subdomain Route"
         )
 
+    def get_worker_subdomain_status(
+        self,
+        account_id: str,
+        script_name: str
+    ) -> bool:
+        """
+        Retrieves whether the *.workers.dev route is enabled for a Worker script.
+        Endpoint: GET /client/v4/accounts/{account_id}/workers/scripts/{script_name}/subdomain
+        """
+        try:
+            res = self.client.request(
+                method="GET",
+                endpoint=f"/accounts/{account_id}/workers/scripts/{script_name}/subdomain",
+                step="Get Worker Subdomain Status"
+            )
+            result = res.get("result", {})
+            if isinstance(result, dict):
+                return bool(result.get("enabled", False))
+            return False
+        except Exception:
+            return False
+
     def create_subdomain(
         self,
         account_id: str,

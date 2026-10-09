@@ -58,11 +58,8 @@ scratch/
 # Releases Archive
 releases/
 
-# Android Build Outputs
+# Android Build Outputs & Legacy Tree
 .gradle/
-BuilderV2/android/local.properties
-BuilderV2/android/.gradle/
-BuilderV2/android/app/build/
-BuilderV2/android/build/
+BuilderV2/android/
 *.apk
 *.aab

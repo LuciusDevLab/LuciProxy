@@ -1,0 +1,22 @@
+{
+  "windows": {
+    "version": "2.0.0",
+    "release_tag": "manager-v2.0.0",
+    "download_url": "https://github.com/LuciusDevLab/LuciProxy/releases/download/manager-v2.0.0/LuciProxyManager-Setup-2.0.0.exe",
+    "release_url": "https://github.com/LuciusDevLab/LuciProxy/releases/tag/manager-v2.0.0",
+    "changelog": "v2.0.0: Initial stable release of LuciProxy Manager for Windows featuring multi-account Cloudflare management, in-place Worker updates with D1 preservation, and real-time analytics.",
+    "sha256": null,
+    "min_supported_version": "2.0.0"
+  },
+  "android": {
+    "version": "2.0.0",
+    "version_code": 1,
+    "release_tag": "manager-v2.0.0",
+    "download_url": "https://github.com/LuciusDevLab/LuciProxy/releases/download/manager-v2.0.0/luciproxy-manager-2.0.0.apk",
+    "release_url": "https://github.com/LuciusDevLab/LuciProxy/releases/tag/manager-v2.0.0",
+    "changelog": "v2.0.0: Initial stable release of LuciProxy Manager for Android with embedded Python runtime, account management, and native Jetpack Compose UI.",
+    "sha256": null,
+    "min_supported_version": "2.0.0"
+  },
+  "released_at": "2026-10-07T00:00:00Z"
+}

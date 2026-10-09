@@ -5,7 +5,7 @@ Handles D1 database listing, metadata discovery, query execution, and database d
 
 import json
 import secrets
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import uuid
 
 from .client import CloudflareClient
@@ -139,10 +139,10 @@ class D1Service:
         except Exception:
             return False
 
-    def get_master_key(self, account_id: str, database_id: str) -> Optional[str]:
+    def get_sys_config(self, account_id: str, database_id: str) -> Optional[Dict[str, Any]]:
         """
-        Queries D1 kv_store table for the active 'sys_config' record and extracts masterKey.
-        Returns the clean master key string, or None if uninitialized.
+        Queries D1 kv_store table for the active 'sys_config' record and parses JSON.
+        Returns the dictionary or None if uninitialized.
         """
         try:
             res = self.execute_query(
@@ -156,39 +156,64 @@ class D1Service:
                 if rows and isinstance(rows[0], dict):
                     raw_val = rows[0].get("value")
                     if raw_val and isinstance(raw_val, str):
-                        parsed = json.loads(raw_val)
-                        key = parsed.get("masterKey")
-                        if key and isinstance(key, str) and key.strip():
-                            return key.strip()
+                        return json.loads(raw_val)
             return None
         except Exception:
             return None
 
-    def seed_master_key(
+    def get_api_route(self, account_id: str, database_id: str) -> Optional[str]:
+        """Returns the active apiRoute stored in D1 sys_config, or None if not set."""
+        cfg = self.get_sys_config(account_id, database_id)
+        if cfg and isinstance(cfg, dict):
+            route = cfg.get("apiRoute")
+            if route and isinstance(route, str) and route.strip():
+                return route.strip()
+        return None
+
+    def get_master_key(self, account_id: str, database_id: str) -> Optional[str]:
+        """
+        Queries D1 kv_store table for the active 'sys_config' record and extracts masterKey.
+        Returns the clean master key string, or None if uninitialized.
+        """
+        try:
+            cfg = self.get_sys_config(account_id, database_id)
+            if cfg and isinstance(cfg, dict):
+                key = cfg.get("masterKey")
+                if key and isinstance(key, str) and key.strip():
+                    return key.strip()
+            return None
+        except Exception:
+            return None
+
+    def seed_initial_config(
         self,
         account_id: str,
         database_id: str,
-        preferred_key: Optional[str] = None
-    ) -> str:
+        preferred_key: Optional[str] = None,
+        api_route: Optional[str] = None
+    ) -> Tuple[str, str]:
         """
-        Guarantees that the deployment has an authoritative administrative masterKey.
-        1. If an active key already exists in D1 (legacy database), returns it.
-        2. Otherwise generates a cryptographically random 24-character hex key
-           (12 bytes, matching generateSecureToken() in LuciProxy/src/db/d1.js).
-        3. Persists initial system configuration into D1 kv_store WITHOUT redundant
-           plaintext secret storage (Worker Secret MASTER_KEY is authoritative).
-        Returns: The authoritative administrative master key.
+        Guarantees that the deployment has an authoritative administrative masterKey and apiRoute.
+        1. If active config already exists in D1, preserves existing key and apiRoute.
+        2. Otherwise generates random key and random apiRoute, and seeds sys_config into D1.
+        Returns: Tuple[master_key, active_api_route].
         """
-        existing = self.get_master_key(account_id, database_id)
-        if existing:
-            return existing
+        existing_cfg = self.get_sys_config(account_id, database_id)
+        if existing_cfg and isinstance(existing_cfg, dict):
+            existing_key = existing_cfg.get("masterKey")
+            existing_route = existing_cfg.get("apiRoute") or "sync"
+            resolved_key = (existing_key or (preferred_key or secrets.token_hex(12))).strip()
+            return (resolved_key, existing_route)
 
+        from ..deployment.naming import generate_random_api_route
         master_key = (preferred_key or secrets.token_hex(12)).strip()
+        route = (api_route or generate_random_api_route(10)).strip()
         device_id = str(uuid.uuid4())
 
         initial_config = {
             "name": "LuciProxy",
-            "apiRoute": "sync",
+            "masterKey": master_key,
+            "apiRoute": route,
             "deviceId": device_id,
             "mode": "alpha",
             "maintenanceHost": "https://www.ubuntu.com, https://www.docker.com",
@@ -212,5 +237,19 @@ class D1Service:
             params=[json.dumps(initial_config)]
         )
 
-        return master_key
+        return (master_key, route)
+
+    def seed_master_key(
+        self,
+        account_id: str,
+        database_id: str,
+        preferred_key: Optional[str] = None,
+        api_route: Optional[str] = None
+    ) -> str:
+        """
+        Guarantees that the deployment has an authoritative administrative masterKey.
+        Returns: The authoritative administrative master key.
+        """
+        key, _ = self.seed_initial_config(account_id, database_id, preferred_key, api_route)
+        return key
 

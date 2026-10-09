@@ -281,6 +281,13 @@ def test_create_worker_provisions_d1_and_deploys(memory_db, mock_source_dir):
         worker_instance = MockWorkerSvc.return_value
         worker_instance.get_account_subdomain.return_value = "mysubdomain"
         worker_instance.upload_worker_multipart.return_value = {"id": "amber-finch-2002"}
+        worker_instance.discover_worker_d1_bindings.return_value = [
+            DiscoveredD1BindingDto(
+                binding_name="IOT_DB",
+                database_id="new-d1-uuid-12345",
+                database_name="amber-brook-1001"
+            )
+        ]
 
         result = installer.create_worker(
             connection_id="test-conn-1",

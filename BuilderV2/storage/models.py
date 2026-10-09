@@ -44,6 +44,7 @@ class ManagedWorkerRecord:
     d1DatabaseId: Optional[str] = None
     d1Name: Optional[str] = None
     installedWorkerVersion: str = "v1.2.0"  # Strictly installedWorkerVersion, NEVER installedVersion
+    apiRoute: str = "sync"
     lastWorkerUpdateCheck: Optional[str] = None
     latestDiscoveredWorkerVersion: Optional[str] = None
     lastUpdatedAt: Optional[str] = None

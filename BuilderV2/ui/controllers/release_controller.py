@@ -70,3 +70,42 @@ class ReleaseController:
         except Exception:
             return None
 
+    def check_all_updates(self, force_refresh: bool = False) -> Dict[str, Any]:
+        """
+        Executes unified dual-channel update checks across all managed workers
+        and the Windows Manager application.
+        """
+        from ...spec.unified_version_checker import UnifiedVersionChecker
+        checker = UnifiedVersionChecker()
+        app_state = self.db.get_app_state()
+        current_manager = app_state.currentManagerVersion or "2.0.0"
+
+        # List all managed workers across accounts
+        all_workers = self.db.list_managed_workers()
+        worker_dicts = [
+            {
+                "worker_name": w.workerName,
+                "worker_id": w.workerId,
+                "installed_worker_version": w.installedWorkerVersion,
+                "installed_version": w.installedWorkerVersion,
+                "accountId": w.accountId,
+            }
+            for w in all_workers
+        ]
+
+        result = checker.check_all(
+            platform="windows",
+            installed_app_version=current_manager,
+            managed_workers=worker_dicts,
+            force_remote=force_refresh
+        )
+
+        now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+        if result.get("app_release"):
+            self.db.update_app_state(
+                last_check=now_str,
+                latest_discovered=result["app_release"]["version"]
+            )
+
+        return result
+

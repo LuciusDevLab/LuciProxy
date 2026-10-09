@@ -4,7 +4,7 @@ API tokens are strictly forbidden from this schema and reside exclusively
 in the platform-native secure credential store.
 """
 
-CURRENT_SCHEMA_VERSION = 2
+CURRENT_SCHEMA_VERSION = 3
 
 # Initial baseline schema (Version 1)
 SCHEMA_V1_SQL = """
@@ -106,4 +106,10 @@ MIGRATION_V1_TO_V2_SQL = """
 CREATE INDEX IF NOT EXISTS idx_history_worker ON update_history(workerName);
 CREATE INDEX IF NOT EXISTS idx_history_time ON update_history(updatedAt);
 CREATE INDEX IF NOT EXISTS idx_conn_status ON cloudflare_connections(status);
+"""
+
+# Migration from V2 to V3: add apiRoute column to managed_workers
+MIGRATION_V2_TO_V3_SQL = """
+-- Version 3 migration: add apiRoute column to managed_workers
+ALTER TABLE managed_workers ADD COLUMN apiRoute TEXT NOT NULL DEFAULT 'sync';
 """

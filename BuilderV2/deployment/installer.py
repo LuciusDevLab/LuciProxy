@@ -13,6 +13,7 @@ Critical Safety Invariants:
 from datetime import datetime
 import json
 from pathlib import Path
+import re
 from typing import Any, Callable, Dict, List, Optional
 import uuid
 
@@ -25,7 +26,7 @@ from ..storage.database import LocalDatabase
 from ..storage.models import ManagedWorkerRecord, UpdateHistoryRecord
 from ..worker_source.source_service import WorkerSourceService
 from .models import DeploymentResult
-from .naming import generate_deployment_names
+from .naming import generate_deployment_names, generate_random_api_route
 
 
 class WorkerInstaller:
@@ -72,7 +73,7 @@ class WorkerInstaller:
         7. Configures workers.dev subdomain route.
         8. Persists state in local SQLite database.
         """
-        total_steps = 8
+        total_steps = 9
 
         def notify(step: int, title: str, details: str):
             if progress_callback:
@@ -88,12 +89,13 @@ class WorkerInstaller:
             snapshot = self.source_service.download_source_at_revision(signal.source_revision)
             pkg = self.source_service.build_deployment_package(snapshot, signal.version)
 
-            # Step 2: Prepare Resource Names
+            # Step 2: Prepare Resource Names & Random API Route
             if not worker_name or not d1_name:
                 auto_worker, auto_d1 = generate_deployment_names()
                 worker_name = worker_name or auto_worker
                 d1_name = d1_name or auto_d1
-            notify(2, "Preparing Resource Names", f"Worker: '{worker_name}' | D1: '{d1_name}'")
+            api_route = generate_random_api_route(10)
+            notify(2, "Preparing Resource Names", f"Worker: '{worker_name}' | D1: '{d1_name}' | Route: '/{api_route}'")
 
             client, worker_svc, d1_svc = self._get_cf_services(connection_id)
 
@@ -104,12 +106,30 @@ class WorkerInstaller:
             if not d1_uuid:
                 raise RuntimeError(f"Cloudflare API did not return UUID for created D1 database '{d1_name}'.")
 
-            # Step 4: Initialize Schema & Seed Master Key
-            notify(4, "Initializing Database Schema", f"Executing D1 schema DDL and seeding admin key...")
+            # Step 4: Initialize Schema & Seed Master Key & API Route
+            notify(4, "Initializing Database Schema", f"Executing D1 schema DDL and seeding admin configuration...")
             d1_svc.initialize_schema(account_id, d1_uuid)
             if not d1_svc.verify_schema(account_id, d1_uuid):
                 raise RuntimeError(f"D1 database '{d1_name}' ({d1_uuid}) failed schema verification.")
-            master_key = d1_svc.seed_master_key(account_id, d1_uuid, preferred_master_key)
+            if not api_route or not re.match(r"^[a-zA-Z0-9_-]+$", api_route):
+                raise RuntimeError(f"Invalid API route '{api_route}' generated for deployment.")
+            try:
+                cfg_res = d1_svc.seed_initial_config(account_id, d1_uuid, preferred_master_key, api_route)
+                if isinstance(cfg_res, (tuple, list)) and len(cfg_res) >= 2:
+                    master_key, active_route = str(cfg_res[0]), str(cfg_res[1])
+                elif isinstance(cfg_res, str):
+                    master_key = cfg_res
+                    active_route = api_route
+                elif hasattr(d1_svc, "seed_master_key"):
+                    master_key = str(d1_svc.seed_master_key(account_id, d1_uuid, preferred_master_key))
+                    active_route = api_route
+                else:
+                    raise RuntimeError("Failed to seed initial config: unexpected response format from D1 service.")
+            except Exception as seed_err:
+                raise RuntimeError(f"Failed to seed initial database configuration and route: {seed_err}") from seed_err
+
+            if not active_route or not re.match(r"^[a-zA-Z0-9_-]+$", active_route):
+                raise RuntimeError(f"Invalid active API route '{active_route}' obtained after configuration seeding.")
 
             # Step 5: Upload Multipart Worker Script
             notify(5, "Uploading Worker Script", f"Deploying code with IOT_DB binding to Cloudflare Edge...")
@@ -143,15 +163,49 @@ class WorkerInstaller:
             subdomain = worker_svc.get_account_subdomain(account_id)
             if subdomain:
                 worker_url = f"https://{worker_name}.{subdomain}.workers.dev"
-                try:
-                    worker_svc.enable_worker_subdomain(account_id, worker_name, enabled=True)
-                except Exception:
-                    pass
             else:
                 worker_url = f"https://{worker_name}.workers.dev"
+            try:
+                worker_svc.enable_worker_subdomain(account_id, worker_name, enabled=True)
+                worker_svc.get_worker_subdomain_status(account_id, worker_name)
+            except Exception:
+                pass
 
-            # Step 8: Persist Local State in SQLite
-            notify(8, "Finalizing Deployment", "Saving managed worker and recording audit history...")
+            # Step 8: Verify Deployment & Bindings
+            notify(8, "Verifying Deployment", "Checking Worker bindings and edge reachability...")
+            try:
+                bindings = worker_svc.discover_worker_d1_bindings(account_id, worker_name)
+                if isinstance(bindings, list) and len(bindings) > 0:
+                    has_iot = any(
+                        getattr(b, "binding_name", None) == "IOT_DB" and getattr(b, "database_id", None) == d1_uuid
+                        for b in bindings
+                    )
+                    if not has_iot:
+                        raw_bindings = worker_svc.get_worker_bindings(account_id, worker_name)
+                        if isinstance(raw_bindings, list) and len(raw_bindings) > 0:
+                            has_iot = any(
+                                b.get("name") == "IOT_DB" and (b.get("id") == d1_uuid or b.get("database_id") == d1_uuid)
+                                for b in raw_bindings
+                            )
+                        if not has_iot:
+                            raise RuntimeError(f"Deployment verification failed: 'IOT_DB' binding to {d1_uuid} was not found on Worker '{worker_name}'.")
+            except Exception as v_err:
+                raise RuntimeError(f"Worker verification failed: {v_err}")
+
+            # Ping edge (best-effort; edge DNS may take 10-30s to propagate)
+            import urllib.request
+            try:
+                ping_req = urllib.request.Request(
+                    worker_url,
+                    headers={"User-Agent": "LuciProxy-Manager-Health/2.0"}
+                )
+                with urllib.request.urlopen(ping_req, timeout=5) as ping_resp:
+                    _ = ping_resp.status
+            except Exception:
+                pass
+
+            # Step 9: Persist Local State in SQLite
+            notify(9, "Finalizing Deployment", "Saving managed worker and recording audit history...")
             worker_id = f"{account_id}:{worker_name}"
             now = datetime.utcnow().isoformat() + "Z"
 
@@ -165,6 +219,7 @@ class WorkerInstaller:
                 d1DatabaseId=d1_uuid,
                 d1Name=d1_name,
                 installedWorkerVersion=pkg.version,
+                apiRoute=active_route,
                 lastWorkerUpdateCheck=now,
                 latestDiscoveredWorkerVersion=pkg.version,
                 lastUpdatedAt=now,
@@ -183,7 +238,7 @@ class WorkerInstaller:
                 d1BindingName="IOT_DB",
                 updatedAt=now,
                 status="success",
-                details=f"Fresh installation of Worker '{worker_name}' (v{pkg.version}, commit {pkg.source_revision[:8]}) with D1 '{d1_name}' ({d1_uuid})"
+                details=f"Fresh installation of Worker '{worker_name}' (v{pkg.version}, commit {pkg.source_revision[:8]}) with D1 '{d1_name}' ({d1_uuid}) [route: /{active_route}]"
             )
             self.db.record_update_history(history_rec)
 
@@ -192,6 +247,7 @@ class WorkerInstaller:
                 action="create",
                 worker_name=worker_name,
                 worker_url=worker_url,
+                api_route=active_route,
                 d1_database_id=d1_uuid,
                 d1_binding_name="IOT_DB",
                 d1_name=d1_name,
@@ -200,7 +256,7 @@ class WorkerInstaller:
                 bundle_sha256=pkg.bundle_sha256,
                 master_key=master_key,
                 error=None,
-                details={"account_id": account_id, "connection_id": connection_id}
+                details={"account_id": account_id, "connection_id": connection_id, "api_route": active_route}
             )
 
         except Exception as exc:
@@ -294,6 +350,22 @@ class WorkerInstaller:
             local_rec = self.db.get_managed_worker(worker_id)
             prev_version = local_rec.installedWorkerVersion if local_rec else "unknown"
 
+            # Retrieve existing apiRoute from D1 or local record (strictly preserve existing route!)
+            existing_route = None
+            try:
+                route_res = d1_svc.get_api_route(account_id, existing_d1_id)
+                if isinstance(route_res, str) and route_res.strip():
+                    existing_route = route_res.strip()
+            except Exception:
+                pass
+
+            if not existing_route and local_rec and getattr(local_rec, "apiRoute", None):
+                if isinstance(local_rec.apiRoute, str) and local_rec.apiRoute.strip():
+                    existing_route = local_rec.apiRoute.strip()
+
+            if not existing_route:
+                existing_route = "sync"
+
             # Step 2: Resolve Authoritative Worker Source
             notify(2, "Resolving Worker Source", "Fetching latest Worker version signal...")
             signal = self.source_service.fetch_version_signal()
@@ -350,6 +422,7 @@ class WorkerInstaller:
                 d1DatabaseId=existing_d1_id,
                 d1Name=d1_name,
                 installedWorkerVersion=pkg.version,
+                apiRoute=existing_route,
                 lastWorkerUpdateCheck=now,
                 latestDiscoveredWorkerVersion=pkg.version,
                 lastUpdatedAt=now,
@@ -370,7 +443,7 @@ class WorkerInstaller:
                 status="success",
                 details=(
                     f"Successfully updated Worker '{worker_name}' from {prev_version} to {pkg.version} "
-                    f"({pkg.source_revision[:8]}). Preserved D1 database '{d1_name}' ({existing_d1_id}) under binding '{binding_name}'."
+                    f"({pkg.source_revision[:8]}). Preserved D1 database '{d1_name}' ({existing_d1_id}) under binding '{binding_name}' [route: /{existing_route}]."
                 )
             )
             self.db.record_update_history(history_rec)
@@ -380,6 +453,7 @@ class WorkerInstaller:
                 action="update",
                 worker_name=worker_name,
                 worker_url=worker_url,
+                api_route=existing_route,
                 d1_database_id=existing_d1_id,
                 d1_binding_name=binding_name,
                 d1_name=d1_name,
@@ -388,7 +462,7 @@ class WorkerInstaller:
                 bundle_sha256=pkg.bundle_sha256,
                 master_key=None,
                 error=None,
-                details={"previous_version": prev_version, "account_id": account_id}
+                details={"previous_version": prev_version, "account_id": account_id, "api_route": existing_route}
             )
 
         except Exception as exc:
