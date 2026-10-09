@@ -5,7 +5,7 @@
  * Independent implementation authored specifically for LuciProxy.
  */
 
-export const CURRENT_VERSION = "1.2.1";
+export const CURRENT_VERSION = "1.2.2";
 
 export const DEFAULT_NAT64_PREFIXES = [
     "[2a02:898:146:64::]",

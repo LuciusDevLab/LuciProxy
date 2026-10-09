@@ -113,34 +113,56 @@ export default {
             const upgradeHeader = request.headers.get("Upgrade");
             const isTelemetryStream = upgradeHeader && upgradeHeader.toLowerCase() === "websocket";
 
-            let reqPath = url.pathname;
-            if (reqPath.endsWith("/") && reqPath.length > 1) {
+            // Canonical active route resolution:
+            // The active route MUST come from the deployed configuration (sysConfig.apiRoute).
+            // Normalize: strip leading/trailing slashes, ensure valid path segment.
+            const rawApiRoute = typeof sysConfig.apiRoute === "string" ? sysConfig.apiRoute.trim() : "";
+            const cleanApiRoute = rawApiRoute.replace(/^\/+|\/+$/g, "");
+            const isValidRoute = cleanApiRoute.length > 0 && /^[a-zA-Z0-9_-]+$/.test(cleanApiRoute);
+            const activeRoute = isValidRoute ? cleanApiRoute : "sync";
+
+            // Authorized administrative prefixes are strictly limited to the active route
+            // (and optional adminPath if explicitly configured).
+            // Do NOT include "/sync" as an alias when activeRoute differs from "sync"!
+            const validPrefixes = new Set([activeRoute]);
+            if (sysConfig.adminPath && typeof sysConfig.adminPath === "string") {
+                const cleanAdmin = sysConfig.adminPath.trim().replace(/^\/+|\/+$/g, "");
+                if (cleanAdmin.length > 0 && /^[a-zA-Z0-9_-]+$/.test(cleanAdmin)) {
+                    validPrefixes.add(cleanAdmin);
+                }
+            }
+
+            // Path normalization: collapse multiple slashes, strip trailing slashes, check traversal
+            let rawPath = url.pathname || "/";
+            if (rawPath.includes("/.") || rawPath.includes("\\")) {
+                return await serveMaintenancePage(request, url, sysConfig);
+            }
+            let reqPath = rawPath.replace(/\/+/g, "/");
+            if (reqPath.length > 1 && reqPath.endsWith("/")) {
                 reqPath = reqPath.slice(0, -1);
             }
 
-            const subRoute = `/${encodeURI(sysConfig.apiRoute || "sync")}`;
-            const adminPrefixes = Array.from(
-                new Set(
-                    ["/sync", subRoute, sysConfig.adminPath ? `/${encodeURI(sysConfig.adminPath)}` : null].filter(Boolean)
-                )
-            );
+            // Segment decomposition: /<firstSegment>/<remainingPath>
+            const segments = reqPath.split("/").filter(Boolean);
+            const firstSegment = segments[0] || "";
+            const remainingPath = segments.slice(1).join("/");
 
-            const isDataRoute = reqPath === subRoute;
-            const isDashRoute = adminPrefixes.some((p) => reqPath === `${p}/dash`);
-            const isAuthRoute = adminPrefixes.some((p) => reqPath === `${p}/api/auth`);
-            const isSyncRoute = adminPrefixes.some((p) => reqPath === `${p}/api/sync`);
-            const isUsersRoute = adminPrefixes.some((p) => reqPath === `${p}/api/users`);
-            const isStatsRoute = adminPrefixes.some((p) => reqPath === `${p}/api/stats`);
-            const isLogsRoute = adminPrefixes.some((p) => reqPath === `${p}/api/logs`);
-            const isSubSetIpRoute = reqPath === "/sub-setip" || adminPrefixes.some((p) => reqPath === `${p}/sub-setip`);
-            const isBackendCheckRoute = adminPrefixes.some((p) => reqPath === `${p}/api/backend-check`);
-            const isDohRoute = reqPath === "/dns-query" || adminPrefixes.some((p) => reqPath === `${p}/dns-query`);
-            const isProxyIpTestRoute =
-                reqPath === "/proxy-ip/test" ||
-                reqPath === "/api/proxy-ip/test" ||
-                adminPrefixes.some((p) => reqPath === `${p}/proxy-ip/test` || reqPath === `${p}/api/proxy-ip/test`);
-            const isShareSettingsRoute =
-                reqPath === "/share-settings" || adminPrefixes.some((p) => reqPath === `${p}/share-settings`);
+            const isPrefixMatch = validPrefixes.has(firstSegment);
+
+            // Canonical route matching:
+            // All protected endpoints and the dashboard MUST be rooted strictly under the active prefix.
+            const isDataRoute = firstSegment === activeRoute && segments.length === 1;
+            const isDashRoute = isPrefixMatch && remainingPath === "dash";
+            const isAuthRoute = isPrefixMatch && remainingPath === "api/auth";
+            const isSyncRoute = isPrefixMatch && remainingPath === "api/sync";
+            const isUsersRoute = isPrefixMatch && remainingPath === "api/users";
+            const isStatsRoute = isPrefixMatch && remainingPath === "api/stats";
+            const isLogsRoute = isPrefixMatch && remainingPath === "api/logs";
+            const isSubSetIpRoute = (isPrefixMatch && remainingPath === "sub-setip") || (activeRoute === "sync" && firstSegment === "sub-setip");
+            const isBackendCheckRoute = isPrefixMatch && remainingPath === "api/backend-check";
+            const isShareSettingsRoute = isPrefixMatch && remainingPath === "share-settings";
+            const isProxyIpTestRoute = isPrefixMatch && (remainingPath === "proxy-ip/test" || remainingPath === "api/proxy-ip/test");
+            const isDohRoute = (isPrefixMatch && remainingPath === "dns-query") || (segments.length === 1 && firstSegment === "dns-query");
 
             const isAuthorizedRoute =
                 isDataRoute ||
@@ -191,8 +213,7 @@ export default {
 
             // 2. Dashboard View
             if (isDashRoute) {
-                const visitedPrefix = reqPath.split("/")[1] || sysConfig.apiRoute || "sync";
-                const html = await renderDashboardHtml(env, CURRENT_VERSION, visitedPrefix);
+                const html = await renderDashboardHtml(env, CURRENT_VERSION, activeRoute);
                 return new Response(html, {
                     headers: { "Content-Type": "text/html;charset=utf-8" },
                 });

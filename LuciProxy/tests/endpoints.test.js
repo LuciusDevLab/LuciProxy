@@ -613,25 +613,33 @@ test("Endpoints - Subscription Route Update decouples subscription from admin da
     const newSubText = await newSubRes.text();
     assert(newSubText.length > 0);
 
-    // 5. Admin dashboard at /sync/dash STILL works without interruption
+    // 5. Old route /sync/dash NO LONGER serves dashboard (serves camouflage)
     const dashReq = new Request("https://worker.test/sync/dash", { method: "GET" });
     const dashRes = await worker.fetch(dashReq, env, mockCtx);
-    assert.equal(dashRes.status, 200);
-    const dashHtml = await dashRes.text();
-    assert(dashHtml.includes("LuciProxy"));
+    assert.equal(dashRes.status, 404);
 
-    // 6. Admin APIs at /sync/api/users STILL authenticate without unauthorized error
+    // 6. Old route /sync/api/users NO LONGER serves API (serves camouflage)
     const usersReq = new Request("https://worker.test/sync/api/users", {
         method: "GET",
         headers: { "Authorization": "Bearer " + adminKey },
     });
     const usersRes = await worker.fetch(usersReq, env, mockCtx);
-    assert.equal(usersRes.status, 200);
+    assert.equal(usersRes.status, 404);
 
-    // 7. Admin dashboard at /private-sub-42/dash ALSO works
+    // 7. New route /private-sub-42/dash SERVES admin dashboard
     const newDashReq = new Request("https://worker.test/private-sub-42/dash", { method: "GET" });
     const newDashRes = await worker.fetch(newDashReq, env, mockCtx);
     assert.equal(newDashRes.status, 200);
+    const dashHtml = await newDashRes.text();
+    assert(dashHtml.includes("LuciProxy"));
+
+    // 8. New route /private-sub-42/api/users SERVES users API
+    const newUsersReq = new Request("https://worker.test/private-sub-42/api/users", {
+        method: "GET",
+        headers: { "Authorization": "Bearer " + adminKey },
+    });
+    const newUsersRes = await worker.fetch(newUsersReq, env, mockCtx);
+    assert.equal(newUsersRes.status, 200);
 });
 
 test("Endpoints - Simultaneous Master Key rotation and Subscription Route update", async () => {
@@ -666,16 +674,24 @@ test("Endpoints - Simultaneous Master Key rotation and Subscription Route update
     assert.equal(saveJson.config.apiRoute, "dual-update-route");
     assert.equal(saveJson.config.masterKey, newKey);
 
-    // Old key fails
-    const oldAuth = await worker.fetch(new Request("https://worker.test/sync/api/auth", {
+    // Old route /sync/api/auth NO LONGER reaches auth handler (serves camouflage)
+    const oldSyncAuth = await worker.fetch(new Request("https://worker.test/sync/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: newKey }),
+    }), env, mockCtx);
+    assert.equal(oldSyncAuth.status, 404);
+
+    // Old key fails on new active route
+    const oldAuth = await worker.fetch(new Request("https://worker.test/dual-update-route/api/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ key: oldKey }),
     }), env, mockCtx);
     assert.equal(oldAuth.status, 401);
 
-    // New key succeeds
-    const newAuth = await worker.fetch(new Request("https://worker.test/sync/api/auth", {
+    // New key succeeds on new active route
+    const newAuth = await worker.fetch(new Request("https://worker.test/dual-update-route/api/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ key: newKey }),
@@ -688,13 +704,21 @@ test("Endpoints - Simultaneous Master Key rotation and Subscription Route update
     }), env, mockCtx);
     assert.equal(subRes.status, 200);
 
-    // Cold restart preserves both
+    // Cold restart preserves both on the active route
     resetStateStore();
-    const coldAuth = await worker.fetch(new Request("https://worker.test/sync/api/auth", {
+    const coldAuth = await worker.fetch(new Request("https://worker.test/dual-update-route/api/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ key: newKey }),
     }), env, mockCtx);
     assert.equal(coldAuth.status, 200);
+
+    // Old route /sync/api/auth still rejected after cold restart
+    const coldOldAuth = await worker.fetch(new Request("https://worker.test/sync/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: newKey }),
+    }), env, mockCtx);
+    assert.equal(coldOldAuth.status, 404);
 });
 
