@@ -1,8 +1,8 @@
 {
-  "version": "1.2.1",
-  "source_revision": "3aafad12745c59a849610d603fc22b22f656ac36",
+  "version": "1.2.2",
+  "source_revision": "e0b338e8ac8f238d78281fa64f77e678b9fe55d8",
   "repo_url": "https://github.com/LuciusDevLab/LuciProxy",
-  "release_url": "https://github.com/LuciusDevLab/LuciProxy/releases",
-  "changelog": "v1.2.1: Modern Worker release with clean-room Proxy IP pool management, multi-client routing parity (Xray, Sing-box, Mihomo/Clash), and immutable source-based deployment.",
-  "released_at": "2026-10-07"
+  "release_url": "https://github.com/LuciusDevLab/LuciProxy/releases/tag/worker-v1.2.2",
+  "changelog": "v1.2.2: Enforce exclusive randomized apiRoute and panel namespace, ensuring only the configured active apiRoute can access the management panel and protected APIs.",
+  "released_at": "2026-10-10"
 }
