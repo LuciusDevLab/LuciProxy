@@ -1,0 +1,14 @@
+{
+  "luciproxy_version": "1.2.3",
+  "source_revision": "19447ffe557afd3f69388ecd7503d15ba5a71d37",
+  "git_commit": "19447ffe557afd3f69388ecd7503d15ba5a71d37",
+  "artifact_sha256": "7aedb6eef185868bb29b46bf83a8454ad1d18ee1baaf85fa964a624b6d0a618d",
+  "builder_version": "2.0.0",
+  "build_timestamp": "2026-10-10T20:00:00Z",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "main_module": "index.js",
+  "d1_binding_name": "IOT_DB"
+}
