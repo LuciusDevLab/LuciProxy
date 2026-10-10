@@ -5,7 +5,7 @@
  * Independent implementation authored specifically for LuciProxy.
  */
 
-export const CURRENT_VERSION = "1.2.2";
+export const CURRENT_VERSION = "1.2.3";
 
 export const DEFAULT_NAT64_PREFIXES = [
     "[2a02:898:146:64::]",
@@ -18,12 +18,38 @@ export const DEFAULT_NAT64_PREFIXES = [
 // Fallback defaults to standard RFC 6052 NAT64 IPv6 gateways.
 export const DEFAULT_BACKUP_RELAYS = [];
 
-// Approved built-in default Proxy IP pool for LuciProxy
+// Approved built-in default Proxy IP pool for LuciProxy (30 endpoints)
 export const DEFAULT_PROXY_IP_POOL = [
-    "proxyip.fxxk.dedyn.io",
-    "workers.cloudflare.cyou",
+    "proxy.zjcloud.us.ci",
+    "pyip.ygkkk.dpdns.org",
+    "proxy.farel.is-a.dev",
+    "proxyip.oracle.fxxk.dedyn.io",
+    "di.nscl.ir",
+    "nima.nscl.ir",
+    "tr.diam4.ggff.net",
+    "kz.proxyip.etoj.run.place",
     "proxyip.jp.fxxk.dedyn.io",
-    "proxyip.sg.fxxk.dedyn.io"
+    "proxyip.us.fxxk.dedyn.io",
+    "proxyip.cmliussss.net",
+    "proxyip.hk.cmliussss.net",
+    "proxyip.sg.cmliussss.net",
+    "proxyip.jp.cmliussss.net",
+    "proxyip.kr.cmliussss.net",
+    "proxyip.in.cmliussss.net",
+    "proxyip.gb.cmliussss.net",
+    "proxyip.fr.cmliussss.net",
+    "proxyip.de.cmliussss.net",
+    "proxyip.nl.cmliussss.net",
+    "proxyip.se.cmliussss.net",
+    "proxyip.fi.cmliussss.net",
+    "proxyip.pl.cmliussss.net",
+    "proxyip.ru.cmliussss.net",
+    "proxyip.ch.cmliussss.net",
+    "proxyip.lv.cmliussss.net",
+    "proxyip.us.cmliussss.net",
+    "proxyip.ca.cmliussss.net",
+    "kr.william.us.ci",
+    "tw.william.us.ci"
 ];
 
 export const DEFAULT_ECH_CONFIGS = [

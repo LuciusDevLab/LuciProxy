@@ -6,13 +6,8 @@
  * Clean-room implementation authored specifically for LuciProxy.
  */
 
-// Approved built-in default Proxy IP pool (RFC-compliant hostnames/ports)
-export const DEFAULT_PROXY_IP_POOL = [
-    "proxyip.fxxk.dedyn.io",
-    "workers.cloudflare.cyou",
-    "proxyip.jp.fxxk.dedyn.io",
-    "proxyip.sg.fxxk.dedyn.io"
-];
+import { DEFAULT_PROXY_IP_POOL } from "../config.js";
+export { DEFAULT_PROXY_IP_POOL };
 
 // RFC 1123 hostname validation pattern
 const HOSTNAME_REGEX = /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;

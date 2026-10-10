@@ -38,14 +38,40 @@ const createBaseConfig = (overrides = {}) => ({
 });
 
 // 1. Default pool resolution
-test("ProxyIP 1 - Default pool resolution", () => {
+test("ProxyIP 1 - Default pool resolution (30-entry pool)", () => {
     assert.equal(Array.isArray(DEFAULT_PROXY_IP_POOL), true);
-    assert.equal(DEFAULT_PROXY_IP_POOL.length, 4);
+    assert.equal(DEFAULT_PROXY_IP_POOL.length, 30);
     assert.deepEqual(DEFAULT_PROXY_IP_POOL, [
-        "proxyip.fxxk.dedyn.io",
-        "workers.cloudflare.cyou",
+        "proxy.zjcloud.us.ci",
+        "pyip.ygkkk.dpdns.org",
+        "proxy.farel.is-a.dev",
+        "proxyip.oracle.fxxk.dedyn.io",
+        "di.nscl.ir",
+        "nima.nscl.ir",
+        "tr.diam4.ggff.net",
+        "kz.proxyip.etoj.run.place",
         "proxyip.jp.fxxk.dedyn.io",
-        "proxyip.sg.fxxk.dedyn.io"
+        "proxyip.us.fxxk.dedyn.io",
+        "proxyip.cmliussss.net",
+        "proxyip.hk.cmliussss.net",
+        "proxyip.sg.cmliussss.net",
+        "proxyip.jp.cmliussss.net",
+        "proxyip.kr.cmliussss.net",
+        "proxyip.in.cmliussss.net",
+        "proxyip.gb.cmliussss.net",
+        "proxyip.fr.cmliussss.net",
+        "proxyip.de.cmliussss.net",
+        "proxyip.nl.cmliussss.net",
+        "proxyip.se.cmliussss.net",
+        "proxyip.fi.cmliussss.net",
+        "proxyip.pl.cmliussss.net",
+        "proxyip.ru.cmliussss.net",
+        "proxyip.ch.cmliussss.net",
+        "proxyip.lv.cmliussss.net",
+        "proxyip.us.cmliussss.net",
+        "proxyip.ca.cmliussss.net",
+        "kr.william.us.ci",
+        "tw.william.us.ci"
     ]);
 
     const pool = getEffectiveProxyIpPool(null, {});
@@ -501,3 +527,121 @@ test("ProxyIP 27 - Population node count is identical whether Proxy IP is ON or 
     assert.ok(!nodesOff[0].path.includes("proxyip="));
 });
 
+// 28. 30-entry pool validation and zero case-insensitive duplicates
+test("ProxyIP 28 - Exact 30-entry built-in list order, validity, and zero case-insensitive duplicates", () => {
+    const rawExpectedOrder = [
+        "proxy.zjcloud.us.ci",
+        "pyip.ygkkk.dpdns.org",
+        "proxy.farel.is-a.dev",
+        "proxyip.oracle.fxxk.dedyn.io",
+        "di.nscl.ir",
+        "nima.nscl.ir",
+        "tr.diam4.ggff.net",
+        "kz.proxyip.etoj.run.place",
+        "proxyip.jp.fxxk.dedyn.io",
+        "proxyip.us.fxxk.dedyn.io",
+        "ProxyIP.CMLiussss.net",
+        "ProxyIP.HK.CMLiussss.net",
+        "ProxyIP.SG.CMLiussss.net",
+        "ProxyIP.JP.CMLiussss.net",
+        "ProxyIP.KR.CMLiussss.net",
+        "ProxyIP.IN.CMLiussss.net",
+        "ProxyIP.GB.CMLiussss.net",
+        "ProxyIP.FR.CMLiussss.net",
+        "ProxyIP.DE.CMLiussss.net",
+        "ProxyIP.NL.CMLiussss.net",
+        "ProxyIP.SE.CMLiussss.net",
+        "ProxyIP.FI.CMLiussss.net",
+        "ProxyIP.PL.CMLiussss.net",
+        "ProxyIP.RU.CMLiussss.net",
+        "ProxyIP.CH.CMLiussss.net",
+        "ProxyIP.LV.CMLiussss.net",
+        "ProxyIP.US.CMLiussss.net",
+        "ProxyIP.CA.CMLiussss.net",
+        "kr.william.us.ci",
+        "tw.william.us.ci"
+    ];
+
+    assert.equal(DEFAULT_PROXY_IP_POOL.length, 30);
+    assert.equal(rawExpectedOrder.length, 30);
+
+    // Verify order and case-insensitive equality
+    for (let i = 0; i < 30; i++) {
+        const item = DEFAULT_PROXY_IP_POOL[i];
+        assert.equal(item.toLowerCase(), rawExpectedOrder[i].toLowerCase(), `Order or identity mismatch at index ${i}`);
+        const validated = validateProxyIpEntry(item);
+        assert.equal(validated.valid, true, `Entry at index ${i} must be valid: ${item}`);
+    }
+
+    // Zero case-insensitive duplicates
+    const lowerSet = new Set(DEFAULT_PROXY_IP_POOL.map(s => s.toLowerCase()));
+    assert.equal(lowerSet.size, 30, "Pool must contain exactly 30 distinct hostnames");
+});
+
+// 29. Dashboard HTML consistency with 30-entry default pool and label
+test("ProxyIP 29 - Dashboard HTML consistency with 30-entry pool and UI count label", () => {
+    const repoRoot = path.resolve(import.meta.dirname, "../..");
+    const dashPath = path.join(repoRoot, "LuciProxy/src/assets/dashboard.html");
+    const content = fs.readFileSync(dashPath, "utf-8");
+
+    // Must contain 30 Built-in Endpoints label in HTML and JS
+    assert.ok(content.includes("Active Proxy IP Pool (30 Built-in Endpoints)"), "Must display 30 Built-in Endpoints");
+    assert.ok(!content.includes("Active Proxy IP Pool (4 Built-in Endpoints)"), "Must not display legacy 4 Built-in Endpoints");
+
+    // Verify all 30 pool items are present in dashboard.html
+    for (const item of DEFAULT_PROXY_IP_POOL) {
+        assert.ok(content.includes(item), `Dashboard must include pool item: ${item}`);
+    }
+});
+
+// 30. Deterministic selection behavior with 30-entry pool
+test("ProxyIP 30 - Deterministic selection behavior and rotation failover with 30 entries", () => {
+    const ctx = { colo: "FRA", clientId: "sub-test-client", index: 0 };
+    const initialPick = selectDeterministicProxyIp(DEFAULT_PROXY_IP_POOL, { ...ctx, attempt: 0 });
+    assert.ok(initialPick, "Initial pick must not be null");
+    assert.ok(DEFAULT_PROXY_IP_POOL.includes(initialPick), "Initial pick must exist in pool");
+
+    // Consecutive failover attempts should cycle through candidates
+    const distinctPicks = new Set();
+    for (let attempt = 0; attempt < 30; attempt++) {
+        const pick = selectDeterministicProxyIp(DEFAULT_PROXY_IP_POOL, { ...ctx, attempt });
+        distinctPicks.add(pick);
+    }
+    assert.equal(distinctPicks.size, 30, "Advancing attempt from 0 to 29 must cover all 30 candidates");
+
+    // Attempt 30 wraps around modulo 30
+    const wrappedPick = selectDeterministicProxyIp(DEFAULT_PROXY_IP_POOL, { ...ctx, attempt: 30 });
+    assert.equal(wrappedPick, initialPick, "Attempt 30 must wrap around to attempt 0 pick");
+});
+
+// 31. Persistence safety: 30-entry defaults do not override custom or user settings
+test("ProxyIP 31 - Persistence safety: 30-entry defaults never clobber existing custom configurations", () => {
+    // 1. User override takes strict priority
+    const userProfile = { proxyIp: "user-custom.domain.com:8443" };
+    const userEffective = getEffectiveProxyIpPool(userProfile, {});
+    assert.deepEqual(userEffective, ["user-custom.domain.com:8443"]);
+    for (const def of DEFAULT_PROXY_IP_POOL) {
+        assert.equal(userEffective.includes(def), false, "User override must not include default entries");
+    }
+
+    // 2. Operator custom pool takes strict priority
+    const customSysConfig = {
+        proxyIpMode: "custom",
+        proxyIpPool: ["operator-relay.internal.net", "backup-relay.internal.net:8443"]
+    };
+    const operatorEffective = getEffectiveProxyIpPool(null, customSysConfig);
+    assert.deepEqual(operatorEffective, ["operator-relay.internal.net", "backup-relay.internal.net:8443"]);
+
+    // 3. Disabled ProxyIP remains strictly disabled
+    const disabledConfig = { enableProxyIp: false };
+    assert.deepEqual(getEffectiveProxyIpPool(null, disabledConfig), []);
+
+    // 4. Policy source tagging
+    const policyUser = resolveProxyIpPolicy(userProfile, customSysConfig);
+    assert.equal(policyUser.source, "user");
+    const policyCustom = resolveProxyIpPolicy(null, customSysConfig);
+    assert.equal(policyCustom.source, "operator");
+    const policyBuiltin = resolveProxyIpPolicy(null, { proxyIpMode: "builtin" });
+    assert.equal(policyBuiltin.source, "builtin");
+    assert.equal(policyBuiltin.pool.length, 30);
+});
